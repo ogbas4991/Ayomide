@@ -33,6 +33,13 @@ python3 -m http.server 8080
 
 ## Deploy
 
-Deployed automatically to GitHub Pages by [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) on every push to `main`.
+Live at: **https://ogbas4991.github.io/Ayomide/**
 
-To deploy your own copy: fork/push the repo, enable **Settings → Pages → Source: GitHub Actions** — done.
+GitHub Pages serves this repo's `main` branch — every push to `main` redeploys automatically.
+
+**First-time setup (repo admin, ~30 seconds):**
+1. Open **Settings → Pages** in the repo
+2. Source: **Deploy from a branch**
+3. Branch: **`main`** / `(root)` → **Save**
+
+The site also runs anywhere static files run (Netlify, Vercel, Cloudflare, any web server) — no build step required.
