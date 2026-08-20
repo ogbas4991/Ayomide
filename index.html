@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Ayomide Studio — chat, upload & edit files, and turn images into videos. Works offline.">
-  <meta name="theme-color" content="#0b0d14">
+  <meta name="description" content="Ayomide Studio — terminal-flavoured PWA: chat, files, image editing, image-to-video, sync. Works offline.">
+  <meta name="theme-color" content="#050807">
   <title>Ayomide Studio</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" type="image/png" sizes="64x64" href="icons/favicon-64.png">
@@ -20,20 +20,22 @@
   <div id="app">
     <aside id="sidebar">
       <div class="brand">
-        <img src="icons/icon-192.png" alt="Ayomide Studio logo">
+        <img id="brand-logo" src="icons/brand.png" alt="Ayomide Studio logo">
         <div class="brand-text">
           <b>Ayomide Studio</b>
-          <span>Chat · Files · Video</span>
+          <span>~/chat · files · video</span>
         </div>
       </div>
       <nav id="side-nav">
-        <button class="nav-item active" data-tab="chat"><span class="nav-ico">💬</span>Chat</button>
-        <button class="nav-item" data-tab="files"><span class="nav-ico">📁</span>Files</button>
-        <button class="nav-item" data-tab="editor"><span class="nav-ico">🎨</span>Editor</button>
-        <button class="nav-item" data-tab="video"><span class="nav-ico">🎬</span>Image → Video</button>
-        <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span>Settings</button>
+        <button class="nav-item active" data-tab="chat"><span class="nav-ico">💬</span><span data-i18n="nav.chat">Chat</span></button>
+        <button class="nav-item" data-tab="files"><span class="nav-ico">📁</span><span data-i18n="nav.files">Files</span></button>
+        <button class="nav-item" data-tab="editor"><span class="nav-ico">🎨</span><span data-i18n="nav.editor">Editor</span></button>
+        <button class="nav-item" data-tab="video"><span class="nav-ico">🎬</span><span data-i18n="nav.video">Image → Video</span></button>
+        <button class="nav-item" data-tab="tools"><span class="nav-ico">🧰</span><span data-i18n="nav.tools">Tools</span></button>
+        <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span><span data-i18n="nav.settings">Settings</span></button>
       </nav>
       <div class="side-foot">
+        <button id="btn-lock-now" class="btn block" hidden>🔒 Lock now</button>
         <button id="btn-install" class="btn primary block" hidden>📲 Install app</button>
         <div id="net-status" class="net-status"><span class="dot"></span><span id="net-text">Online</span></div>
       </div>
@@ -44,12 +46,18 @@
         <img id="topbar-logo" src="icons/favicon-64.png" alt="">
         <h1 id="view-title">Chat</h1>
         <span class="spacer"></span>
+        <button id="btn-palette" class="btn ghost slim" title="Command palette (Ctrl+K)">⌘ Commands</button>
         <button id="btn-update" class="btn ok slim" hidden>🔄 Update ready — reload</button>
       </header>
 
       <!-- ============ CHAT ============ -->
       <section id="view-chat" class="view active">
         <div class="chat-col">
+          <div id="chat-thread-bar">
+            <select id="thread-select" title="Conversations"></select>
+            <button id="btn-new-thread" class="btn slim" title="New conversation">＋ New</button>
+            <button id="btn-del-thread" class="btn slim ghost" title="Delete this conversation">🗑</button>
+          </div>
           <div id="chat-scroll" class="chat-scroll">
             <div id="chat-list" class="chat-list"></div>
           </div>
@@ -61,8 +69,13 @@
             </div>
             <div class="chat-input-row">
               <button type="button" id="chat-attach" class="icon-btn" title="Attach an image">📎</button>
-              <input id="chat-input" type="text" placeholder="Message Ayomide Assistant…" enterkeyhint="send">
-              <button type="submit" id="chat-send" class="send-btn" title="Send">➤</button>
+              <button type="button" id="chat-mic" class="icon-btn" title="Speak — voice input">🎙</button>
+              <div class="prompt-wrap">
+                <span class="ps1" aria-hidden="true">$</span>
+                <input id="chat-input" type="text" placeholder="type a message…" enterkeyhint="send" data-i18n-ph="chat.placeholder">
+              </div>
+              <button type="button" id="chat-tts" class="icon-btn" title="Read replies aloud">🔇</button>
+              <button type="submit" id="chat-send" class="send-btn" title="Send">❯</button>
             </div>
           </form>
           <input type="file" id="chat-attach-input" accept="image/*" hidden>
@@ -88,14 +101,29 @@
             <option value="audio">Audio</option>
             <option value="text">Text</option>
           </select>
+          <select id="folder-select" title="Folder"><option value="root">📂 All files</option></select>
+          <button id="btn-new-folder" class="btn slim" title="New folder">📁＋</button>
           <span class="spacer"></span>
           <span id="files-count" class="muted"></span>
-          <button id="btn-export-zip" class="btn ghost">📦 Export all (.zip)</button>
+          <button id="btn-view-toggle" class="btn slim" title="Gallery view">🖼</button>
+          <button id="btn-find-dupes" class="btn slim" title="Find duplicate files">♻️</button>
+          <button id="btn-import-zip" class="btn slim" title="Import a ZIP backup">🧳</button>
+          <input type="file" id="zip-input" accept=".zip,application/zip" hidden>
+          <button id="btn-export-zip" class="btn ghost slim">📦 Export all (.zip)</button>
+          <button id="btn-bulk" class="btn slim">☑️ Select</button>
         </div>
+        <div id="bulk-bar" class="bulk-bar" hidden>
+          <b id="bulk-count">0 selected</b>
+          <button id="bulk-delete" class="btn danger slim">🗑 Delete</button>
+          <button id="bulk-move" class="btn slim">📁 Move to…</button>
+          <button id="bulk-zip" class="btn slim">📦 Download ZIP</button>
+          <button id="bulk-cancel" class="btn ghost slim">Cancel</button>
+        </div>
+        <div id="tag-row" class="chip-row"></div>
         <div id="files-grid" class="files-grid"></div>
         <div id="files-empty" class="empty">
           <div class="empty-icon">🗂️</div>
-          <p>No files yet. Upload images, videos, documents — anything.<br>Everything stays on your device.</p>
+          <p>No files here yet. Upload images, videos, documents — anything.<br>Everything stays on your device.</p>
         </div>
       </section>
 
@@ -105,7 +133,7 @@
           <div class="stage-wrap">
             <div id="editor-placeholder" class="empty">
               <div class="empty-icon">🎨</div>
-              <p>Load an image to start editing.<br>Rotate, flip, crop, resize, filters — then save or export.</p>
+              <p>Load an image to start editing — crop, filters, draw, watermark, and more.</p>
               <div class="row">
                 <button id="ed-pick" class="btn primary">📁 Choose from Files</button>
                 <button id="ed-upload" class="btn ghost">⬆️ Upload image</button>
@@ -115,10 +143,36 @@
             <div id="editor-stage" class="editor-stage" hidden>
               <canvas id="editor-canvas"></canvas>
               <div id="crop-layer" class="crop-layer" hidden></div>
+              <input id="ed-text-tool-input" class="text-tool-input" hidden placeholder="Type + Enter">
               <div id="crop-hint" class="crop-hint" hidden>Drag on the image to select the crop area · <b id="crop-size"></b></div>
             </div>
           </div>
           <aside class="panel">
+            <h3>Quick fixes</h3>
+            <div class="btn-row">
+              <button id="ed-auto" class="btn">✨ Auto-enhance</button>
+            </div>
+            <h3>Tools</h3>
+            <div class="btn-row wrap" id="ed-tools">
+              <button data-tool="none" class="btn slim active" title="Pan / no tool">👆</button>
+              <button data-tool="brush" class="btn slim" title="Brush">🖌</button>
+              <button data-tool="arrow" class="btn slim" title="Arrow">➚</button>
+              <button data-tool="rect" class="btn slim" title="Rectangle">▭</button>
+              <button data-tool="text" class="btn slim" title="Text">🅣</button>
+              <button data-tool="emoji" class="btn slim" title="Emoji sticker">😀</button>
+              <button data-tool="pixel" class="btn slim" title="Pixelate (hide area)">▦</button>
+            </div>
+            <div class="row" id="ed-tool-opts">
+              <input type="color" id="ed-color" value="#22d3ee" title="Colour">
+              <label class="inline grow">Size <input type="range" id="ed-size" min="2" max="48" value="6"></label>
+              <button id="ed-clear-marks" class="btn slim ghost" title="Remove all marks">Clear</button>
+            </div>
+            <div id="emoji-palette" class="emoji-palette" hidden></div>
+            <h3>Magic</h3>
+            <div class="btn-row">
+              <button id="ed-cutout" class="btn">🪄 Remove background</button>
+              <button id="ed-chroma" class="btn">🟩 Chroma key…</button>
+            </div>
             <h3>Transform</h3>
             <div class="btn-row">
               <button id="ed-rot-l" class="btn" title="Rotate left">⟲</button>
@@ -128,6 +182,15 @@
             </div>
             <div class="btn-row">
               <button id="ed-crop-start" class="btn">✂️ Crop</button>
+              <select id="ed-crop-ratio" class="crop-ratio" title="Aspect ratio">
+                <option value="free">Free</option>
+                <option value="1:1">1:1</option>
+                <option value="4:5">4:5</option>
+                <option value="3:2">3:2</option>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="2:3">2:3</option>
+              </select>
               <button id="ed-crop-apply" class="btn ok" hidden>Apply crop</button>
               <button id="ed-crop-cancel" class="btn ghost" hidden>Cancel</button>
             </div>
@@ -145,6 +208,21 @@
             <div class="btn-row">
               <button id="ed-reset-filters" class="btn ghost">Reset filters</button>
             </div>
+            <h3>Watermark</h3>
+            <label class="check"><input id="wm-on" type="checkbox"> Enable watermark</label>
+            <input id="wm-text" type="text" placeholder="© Your name or brand">
+            <div class="row">
+              <label class="inline">Pos
+                <select id="wm-pos">
+                  <option value="tl">↖</option><option value="tc">↑</option><option value="tr">↗</option>
+                  <option value="cl">←</option><option value="cc" selected>•</option><option value="cr">→</option>
+                  <option value="bl">↙</option><option value="bc">↓</option><option value="br" selected>↘</option>
+                </select>
+              </label>
+              <input type="color" id="wm-color" value="#ffffff" title="Colour">
+              <label class="inline grow">Size <input id="wm-size" type="range" min="10" max="90" value="26"></label>
+            </div>
+            <label class="field">Opacity <input id="wm-opacity" type="range" min="10" max="100" value="55"></label>
             <h3>Export</h3>
             <div class="row">
               <select id="ed-format" style="width:90px">
@@ -171,7 +249,7 @@
           <div class="stage-wrap">
             <div id="video-placeholder" class="empty">
               <div class="empty-icon">🎬</div>
-              <p>Turn one or more images into a video with motion & fades.</p>
+              <p>Turn one or more images into a video with motion, fades, music and titles.</p>
               <div class="row">
                 <button id="vid-pick-2" class="btn primary">📁 From Files</button>
                 <button id="vid-upload-2" class="btn ghost">⬆️ Upload</button>
@@ -200,6 +278,18 @@
               <input type="file" id="vid-upload-input" accept="image/*" multiple hidden>
             </div>
             <ol id="clip-list" class="clip-list"></ol>
+            <h3>Music 🎵</h3>
+            <div class="btn-row">
+              <button id="vid-audio-pick" class="btn slim">🎵 From Files</button>
+              <button id="vid-audio-upload" class="btn ghost slim">⬆️ Upload</button>
+              <button id="vid-voiceover" class="btn slim">🎙 Voiceover</button>
+              <input type="file" id="vid-audio-input" accept="audio/*" hidden>
+            </div>
+            <div id="vid-audio-row" class="audio-row" hidden>
+              <span id="vid-audio-name" class="muted"></span>
+              <label class="inline grow">Vol <input id="vid-audio-vol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+              <button id="vid-audio-remove" class="btn slim ghost">✕</button>
+            </div>
             <h3>Output</h3>
             <label class="field">Resolution
               <select id="vid-res">
@@ -231,13 +321,23 @@
         </div>
       </section>
 
+      <!-- ============ TOOLS ============ -->
+      <section id="view-tools" class="view">
+        <p class="muted" data-i18n="tools.desc">Power tools — generate, convert, compress, inspect</p>
+        <div id="tools-grid" class="tools-grid"></div>
+        <div id="tool-detail" hidden>
+          <button id="tool-back" class="btn ghost" data-i18n="common.back">← All tools</button>
+          <div id="tool-body"></div>
+        </div>
+      </section>
+
       <!-- ============ SETTINGS ============ -->
       <section id="view-settings" class="view">
         <div class="settings-grid">
           <div class="card">
             <h3>🤖 AI chat provider <span class="badge" id="ai-badge">Local assistant</span></h3>
             <p class="muted">The built-in assistant works fully offline. Optionally connect any OpenAI-compatible API
-              (OpenAI, Groq, OpenRouter, local Ollama…) for real AI replies. Your key is stored only on this device.</p>
+              (OpenAI, Groq, OpenRouter, local Ollama…) for real AI replies with streaming. Your key is stored only on this device.</p>
             <label class="check"><input type="checkbox" id="ai-enabled"> Use external AI provider</label>
             <label class="field">Base URL <input id="ai-url" type="url" placeholder="https://api.openai.com/v1"></label>
             <label class="field">API key <input id="ai-key" type="password" placeholder="sk-…"></label>
@@ -247,21 +347,72 @@
               <button id="ai-test" class="btn ghost">Test connection</button>
             </div>
           </div>
+
+          <div class="card">
+            <h3>☁️ Cloud sync <span class="badge" id="sync-badge">Off</span></h3>
+            <p class="muted">Sync files &amp; chats across your devices through your own sync server
+              (free one-click deploy on Render — see the README). Credentials live only on this device.</p>
+            <label class="field">Server URL <input id="sync-url" type="url" placeholder="https://your-server.onrender.com"></label>
+            <label class="field">Email <input id="sync-email" type="email" placeholder="you@example.com"></label>
+            <label class="field">Password <input id="sync-pass" type="password"></label>
+            <label class="check" style="margin-top:6px"><input type="checkbox" id="e2ee-on"> 🔐 End-to-end encryption — server stores only ciphertext</label>
+            <div id="e2ee-fields" hidden>
+              <label class="field">Sync passphrase <input id="e2ee-pass" type="password" placeholder="Strong passphrase"></label>
+              <label class="check"><input type="checkbox" id="e2ee-remember" checked> Remember passphrase on this device</label>
+            </div>
+            <div class="btn-row wrap">
+              <button id="sync-signin" class="btn primary">Sign in</button>
+              <button id="sync-register" class="btn">Create account</button>
+              <button id="sync-now" class="btn ghost" hidden>🔄 Sync now</button>
+              <button id="sync-out" class="btn warn" hidden>Sign out</button>
+            </div>
+            <p class="muted" id="sync-status"></p>
+          </div>
+
+          <div class="card" id="appearance-card">
+            <h3 data-i18n="settings.appearance">🎨 Appearance & language</h3>
+            <label class="field" data-i18n-label="settings.theme">Theme
+              <select id="theme-mode">
+                <option value="dark">🌙 Dark</option>
+                <option value="light">☀️ Light</option>
+                <option value="auto">🌗 Auto (system)</option>
+              </select>
+            </label>
+            <label class="field">Accent colour</label>
+            <div class="swatches" id="accent-swatches"></div>
+            <label class="field" data-i18n-label="settings.language">Language
+              <select id="lang-select"></select>
+            </label>
+          </div>
+
+          <div class="card">
+            <h3>🔒 Security</h3>
+            <p class="muted">App lock asks for your PIN (or fingerprint) whenever the app opens.
+              The <b>Vault</b> encrypts chosen files with AES-256 — they stay unreadable even with full device access.</p>
+            <div class="btn-row wrap">
+              <button id="lock-setup" class="btn primary">🔐 Enable app lock &amp; vault</button>
+              <button id="lock-disable" class="btn warn" hidden>Disable lock</button>
+              <button id="lock-bio-setup" class="btn" hidden>👆 Add fingerprint unlock</button>
+            </div>
+          </div>
+
           <div class="card">
             <h3>📦 Data</h3>
             <p class="muted" id="storage-usage">…</p>
             <div class="progress slim"><div id="storage-bar"></div></div>
             <div class="btn-row wrap">
               <button id="btn-export-zip-2" class="btn">📦 Export everything (.zip)</button>
+              <button id="btn-import-zip-2" class="btn">🧳 Import backup (.zip)</button>
               <button id="btn-clear-chat" class="btn warn">Clear chat history</button>
               <button id="btn-clear-files" class="btn danger">Delete all files</button>
             </div>
           </div>
+
           <div class="card">
             <h3>ℹ️ About</h3>
-            <p class="muted">Ayomide Studio v1.0 — a Progressive Web App. Chat with the assistant, upload &amp; manage
-              files, edit images, and convert images to video — all in your browser, even offline. Your files never
-              leave your device.</p>
+            <p class="muted">Ayomide Studio v2.0 — a Progressive Web App. Chat (voice + threads), file management with
+              folders/tags/vault, image editing with annotations &amp; watermark, image-to-video with music &amp; titles,
+              cloud sync, and full offline use. Your files never leave your device unless you enable sync.</p>
             <div class="btn-row">
               <button id="btn-install-2" class="btn primary" hidden>📲 Install app</button>
               <button id="btn-refresh" class="btn ghost">🔄 Check for updates</button>
@@ -273,12 +424,25 @@
   </div>
 
   <nav id="bottomnav">
-    <button class="nav-item active" data-tab="chat"><span class="nav-ico">💬</span><span>Chat</span></button>
-    <button class="nav-item" data-tab="files"><span class="nav-ico">📁</span><span>Files</span></button>
-    <button class="nav-item" data-tab="editor"><span class="nav-ico">🎨</span><span>Editor</span></button>
-    <button class="nav-item" data-tab="video"><span class="nav-ico">🎬</span><span>Video</span></button>
-    <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span><span>More</span></button>
+    <button class="nav-item active" data-tab="chat"><span class="nav-ico">💬</span><span data-i18n="nav.chat">Chat</span></button>
+    <button class="nav-item" data-tab="files"><span class="nav-ico">📁</span><span data-i18n="nav.files">Files</span></button>
+    <button class="nav-item" data-tab="editor"><span class="nav-ico">🎨</span><span data-i18n="nav.editor">Editor</span></button>
+    <button class="nav-item" data-tab="video"><span class="nav-ico">🎬</span><span data-i18n="nav.video">Video</span></button>
+    <button class="nav-item" data-tab="tools"><span class="nav-ico">🧰</span><span data-i18n="nav.tools">Tools</span></button>
+    <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span><span data-i18n="nav.more">More</span></button>
   </nav>
+
+  <!-- lock screen -->
+  <div id="lock-screen" hidden>
+    <div class="lock-box">
+      <img src="icons/icon-192.png" alt="">
+      <h2>Ayomide Studio</h2>
+      <input id="lock-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Enter your PIN">
+      <button id="lock-unlock" class="btn primary big">Unlock</button>
+      <button id="lock-biometric" class="btn ghost block" hidden>👆 Unlock with fingerprint / Face ID</button>
+      <p class="muted">Vault files are encrypted — they can't be opened without this PIN.</p>
+    </div>
+  </div>
 
   <div id="toasts" aria-live="polite"></div>
   <div id="modal-root"></div>

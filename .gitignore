@@ -1,0 +1,6 @@
+# local server data (user accounts, synced blobs) — never commit
+server/data/
+
+# OS junk
+.DS_Store
+node_modules/

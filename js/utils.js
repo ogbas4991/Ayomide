@@ -126,6 +126,7 @@ export function isText(t, name) {
 
 export function fileIcon(rec) {
   const t = rec.type || '', n = rec.name || '';
+  if (rec.vault) return '🔒';
   if (isImage(t)) return '🖼️';
   if (isVideo(t)) return '🎬';
   if (isAudio(t)) return '🎵';
@@ -169,6 +170,57 @@ export function blobToDataURL(blob) {
     r.readAsDataURL(blob);
   });
 }
+
+/* ---------- crypto (vault / lock) ---------- */
+export function randomHex(bytes = 16) {
+  const a = new Uint8Array(bytes);
+  crypto.getRandomValues(a);
+  return [...a].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function sha256Hex(str) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function sha1Blob(blob) {
+  const d = await crypto.subtle.digest('SHA-1', await blob.arrayBuffer());
+  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function deriveKey(pin, saltHex) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: Uint8Array.from(saltHex.match(/../g).map((h) => parseInt(h, 16))), iterations: 150000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+
+export async function encryptBlob(blob, key) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, await blob.arrayBuffer());
+  return { blob: new Blob([data], { type: 'application/octet-stream' }), ivHex: [...iv].map((b) => b.toString(16).padStart(2, '0')).join('') };
+}
+
+export async function decryptBlob(encBlob, key, ivHex) {
+  const iv = Uint8Array.from(ivHex.match(/../g).map((h) => parseInt(h, 16)));
+  const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, await encBlob.arrayBuffer());
+  return new Blob([data]);
+}
+
+/* ---------- speech ---------- */
+const EMOJI_RE = /[\p{Extended_Pictographic}\u2190-\u21FF\u2600-\u27BF\uFE0F]/gu;
+export function speak(text) {
+  try {
+    if (!('speechSynthesis' in window)) return false;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(text).replace(EMOJI_RE, ' ').replace(/\s+/g, ' ').slice(0, 1200));
+    u.rate = 1.02;
+    speechSynthesis.speak(u);
+    return true;
+  } catch { return false; }
+}
+export function stopSpeak() { try { speechSynthesis?.cancel(); } catch { /* noop */ } }
 
 /* safe arithmetic evaluation for the assistant */
 export function safeMath(expr) {

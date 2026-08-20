@@ -1,0 +1,3237 @@
+From 91a49e841320904e3d204c78f0012dc6128160db Mon Sep 17 00:00:00 2001
+From: Ayomide Studio Agent <ogbas4991@users.noreply.github.com>
+Date: Thu, 20 Aug 2026 22:42:01 +0000
+Subject: [PATCH 2/4] =?UTF-8?q?feat:=20v3=20=E2=80=94=20AI=20image=20gen?=
+ =?UTF-8?q?=20(free=20endpoint),=20vision=20chat,=20smart=20chat=20actions?=
+ =?UTF-8?q?,=20OCR,=20summaries,=20GIF=20maker=20(custom=20LZW=20encoder),?=
+ =?UTF-8?q?=20collage,=20batch=20tools,=20images=E2=86=92PDF,=20EXIF=20str?=
+ =?UTF-8?q?ipper,=20QR=20studio=20(from-scratch=20ISO=2018004=20generator,?=
+ =?UTF-8?q?=20zxing-validated),=20video=20trimmer,=20insights,=20command?=
+ =?UTF-8?q?=20palette,=20themes,=20EN/Yoruba/Pidgin=20i18n,=20E2E-encrypte?=
+ =?UTF-8?q?d=20sync?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-authored-by: arena-agent <297053741+arena-agent@users.noreply.github.com>
+---
+ README.md            |  50 +--
+ css/app.css          |  68 ++++
+ index.html           |  60 ++-
+ js/actions.js        |  86 +++++
+ js/aiimage.js        | 130 +++++++
+ js/app.js            | 115 +++++-
+ js/batch.js          |  90 +++++
+ js/chat.js           | 162 +++++++-
+ js/editor.js         | 108 ++++++
+ js/exif.js           | 142 +++++++
+ js/gif.js            | 192 +++++++++
+ js/i18n.js           |  84 ++++
+ js/palette.js        |  78 ++++
+ js/pdfmake.js        |  90 +++++
+ js/qr.js             | 335 ++++++++++++++++
+ js/sync.js           |  59 ++-
+ js/tools.js          | 902 +++++++++++++++++++++++++++++++++++++++++++
+ js/video.js          |  37 +-
+ manifest.webmanifest |  20 +
+ server/index.js      |   4 +-
+ sw.js                |  16 +-
+ 21 files changed, 2760 insertions(+), 68 deletions(-)
+ create mode 100644 js/actions.js
+ create mode 100644 js/aiimage.js
+ create mode 100644 js/batch.js
+ create mode 100644 js/exif.js
+ create mode 100644 js/gif.js
+ create mode 100644 js/i18n.js
+ create mode 100644 js/palette.js
+ create mode 100644 js/pdfmake.js
+ create mode 100644 js/qr.js
+ create mode 100644 js/tools.js
+
+diff --git a/README.md b/README.md
+index 407f081..e37be48 100644
+--- a/README.md
+@@ -8,52 +8,38 @@ A **Progressive Web App (PWA)** that works entirely in your browser — even off
+ 
+ | Feature | What it does |
+ |---|---|
+-| 💬 **Chat** | Built-in offline assistant, 🎙 **voice input** (speech recognition), 🔊 **spoken replies**, **multiple conversation threads**, image attachments with local analysis. Optional: connect any OpenAI-compatible API for **streaming** real AI replies. |
+-| 📁 **Files** | Drag & drop upload of anything, **folders**, **tags**, **gallery view** with lightbox, **duplicate finder**, bulk select (delete/move/zip), previews for image/video/audio/text, rename, download. All storage is local (IndexedDB) — nothing leaves your device. |
+-| 🎨 **Editor** | ✨ **Auto-enhance**, rotate/flip, crop with **ratio presets** (1:1, 4:5, 16:9, 9:16…), resize, 7 filter sliders + presets, undo/redo. **Draw & annotate**: brush, arrows, rectangles, text, emoji stickers, pixelate (hide sensitive areas). **Watermark** (text, 9 positions, opacity). Export PNG/JPEG/WebP. |
+-| 🎬 **Image → Video** | Images → real video file (MP4 where supported, else WebM) with Ken Burns motion, fades, **music track** 🎵 (real WebAudio mixing), **animated text titles**, multiple resolutions (720p/1080p/square/Reels), fps & background colour. |
+-| 📦 **Export / Import** | Download any file, export everything as ZIP, and **import ZIP backups back** (also restores chat history). Zero-dependency ZIP reader/writer built in. |
+-| 🔐 **Security** | **App lock** (PIN + optional fingerprint/Face ID via WebAuthn) and an **encrypted Vault** — AES-256-GCM with PBKDF2-derived keys; vault files are unreadable without your PIN. |
+-| 📲 **PWA** | Installable, offline via service worker, **Share Target** (share images from your phone's share sheet straight into the app), File Handling API support. |
+-| ☁️ **Cloud sync** | Optional self-hosted sync server (below): your files & chats on every device. |
++| 💬 **Chat** | Built-in offline assistant, 🎙 voice input, 🔊 spoken replies, multiple threads, image attachments. Optional OpenAI-compatible provider with **streaming** replies and **vision** (the AI sees your images). Chat commands *do things*: “compress all images to 100kb”, “watermark all images with © Ayomide”. |
++| 📁 **Files** | Folders, tags, gallery view + lightbox, duplicate finder, bulk select, previews, encrypted Vault (AES-256), ZIP import/export. |
++| 🎨 **Editor** | Auto-enhance, rotate/flip, crop presets, resize, filters, undo/redo, draw & annotate (brush/arrows/text/emoji/pixelate), watermark, **background removal & chroma key**. |
++| 🎬 **Image → Video** | Ken Burns motion, fades, **music** + **voiceover recording**, animated text titles, all resolutions incl. Reels. |
++| 🧰 **Tools** | **AI image generator** (free, no key), **GIF maker** (images or video), **collage maker**, **batch tools** (convert/resize/compress/watermark), **images → PDF**, **EXIF viewer & stripper** (remove GPS), **QR studio** (styled codes + scanning), **video trimmer + speed**, **OCR**, **insights dashboard**. |
++| ☁️ **Cloud sync** | Self-hosted sync server with **end-to-end encryption** option — the server only ever stores ciphertext. |
++| 📲 **PWA** | Installable, offline, share-sheet target, file handling, app shortcuts, ⌘/Ctrl+K command palette, themes (dark/light/auto + accent colours), **English / Yorùbá / Pidgin** UI. |
+ 
+ ## Tech
+ 
+ - No frontend build step, no frameworks, no dependencies — plain HTML/CSS/ES modules.
+-- **Storage:** IndexedDB (files, chat threads, settings) — device-only unless you enable sync.
+-- **Video:** `<canvas>` animation + `MediaRecorder`, audio mixed live via `WebAudio`.
+-- **Vault:** WebCrypto (PBKDF2 150k + AES-256-GCM).
+-- **PWA:** manifest (with share target & file handlers) + service worker (pre-cached shell, stale-while-revalidate).
++- Custom from-scratch engines (all validated against standard decoders): **QR generator** (ISO 18004 — verified with zxing-cpp), **GIF encoder** (median-cut + LZW — verified with Pillow), **PDF writer** (verified with pypdf), **EXIF parser**, **ZIP reader/writer**.
++- **Storage:** IndexedDB — device-only unless you enable sync.
++- **Video:** canvas + MediaRecorder, audio mixed live via WebAudio.
++- **Vault/E2EE:** WebCrypto (PBKDF2 150k + AES-256-GCM).
++- **PWA:** manifest (share target, file handlers, shortcuts) + service worker v3.
+ 
+ ## Run locally
+ 
+ ```bash
+-# static only
+-python3 -m http.server 8080
+-
+-# or: site + sync server together (recommended)
+-node server/index.js   # → http://localhost:3000
++node server/index.js   # site + sync server → http://localhost:3000
+ ```
+ 
+ ## Cloud sync server
+ 
+-`server/index.js` is a **zero-dependency Node server** (auth with scrypt + HMAC tokens, SQLite-free JSON meta + blob files on disk, 500MB/user quota) that also serves the PWA itself — one deployment gives you the app *and* its backend.
+-
+-**Deploy free (Render):**
+-1. Push this repo to GitHub
+-2. Open <https://render.com/deploy> and point it at your repo (or use the *New Web Service* flow with `render.yaml` in this repo)
+-3. Once live, open the app → Settings → Cloud sync → enter your server URL, create an account, done.
++`server/index.js` — **zero-dependency Node** (scrypt auth, HMAC tokens, 500MB/user quota) that also serves the PWA.
+ 
+-> ⚠️ Render's free plan has an **ephemeral filesystem** (data resets on redeploy) — great for testing.
+-> For persistent sync use **Railway** or **Fly.io** with a volume, or a paid Render disk. Env vars: `PORT`, `DATA_DIR`.
++**Deploy free (Render):** push the repo → <https://render.com/deploy> with your repo URL (uses `render.yaml`).
++> Render free = ephemeral disk (resets on redeploy). For persistent data use Railway/Fly.io with a volume or a paid Render disk. Env: `PORT`, `DATA_DIR`.
+ 
+-**In the app:** Settings → Cloud sync → server URL + email + password → *Create account* → *Sync now*.
+-Sync merges files and chat by id (last-write-wins), pushes/pulls automatically after changes, and syncs Vault files while keeping them encrypted.
++**Use:** Settings → Cloud sync → server URL + email + password → *Create account* → *Sync now*. Tick **End-to-end encryption** and set a passphrase for zero-knowledge sync.
+ 
+ ## Deploy the PWA
+ 
+-GitHub Pages serves this repo's `main` branch — every push to `main` redeploys automatically.
+-
+-**First-time setup (repo admin):** Settings → Pages → Source: *Deploy from a branch* → `main` / `(root)` → Save.
+-
+-The site also runs anywhere static files run (Netlify, Vercel, Cloudflare…) — no build step required.
++GitHub Pages serves `main` — every push redeploys. First-time: Settings → Pages → Deploy from a branch → `main` / `(root)` → Save.
+diff --git a/css/app.css b/css/app.css
+index 7805edd..66c0b45 100644
+--- a/css/app.css
+@@ -393,3 +393,71 @@ label.inline { display: flex; align-items: center; gap: 6px; font-size: 13px; co
+ .lock-box input { text-align: center; font-size: 20px; letter-spacing: .4em; }
+ .lock-box.shake { animation: shake .4s; }
+ @keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
++
++/* ================= v3 additions ================= */
++
++/* light theme */
++:root[data-theme="light"] {
++  --bg: #f2f4fa; --bg2: #e9edf6; --card: #ffffff; --card2: #f3f5fb;
++  --border: #d5dbea; --text: #171b28; --muted: #5c657e; --shadow: 0 10px 30px rgba(20, 30, 60, .12);
++}
++:root[data-theme="light"] .msg.user .bubble { background: linear-gradient(135deg, #5b4bd8, #3b82d9); color: #fff; }
++:root[data-theme="light"] #topbar { background: rgba(242, 244, 250, .85); }
++:root[data-theme="light"] #bottomnav { background: rgba(242, 244, 250, .94); }
++:root[data-theme="light"] .chat-form { background: var(--bg2); }
++:root[data-theme="light"] .editor-stage { background: repeating-conic-gradient(#e7eaf3 0% 25%, #f6f8fd 0% 50%) 50% / 22px 22px; }
++
++/* tools hub */
++.tools-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 12px; margin-top: 12px; }
++.tool-card {
++  display: flex; flex-direction: column; gap: 6px; align-items: flex-start; text-align: left;
++  background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
++  padding: 16px; cursor: pointer; font-size: 14px; transition: transform .15s, border-color .15s;
++}
++.tool-card:hover { transform: translateY(-3px); border-color: var(--acc); }
++.tool-card .tool-icon { font-size: 26px; }
++.tool-card .muted { font-size: 12px; line-height: 1.45; }
++#tool-back { margin-bottom: 12px; }
++.tool-title { margin: 0 0 12px; font-size: 17px; }
++#tool-body textarea, #tool-body input[type="text"] { margin-top: 6px; }
++
++/* command palette */
++.palette { width: min(94vw, 560px); background: var(--bg2); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
++.palette input { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 14px 16px; font-size: 15px; }
++.palette-list { max-height: 320px; overflow-y: auto; padding: 6px; }
++.palette-list button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text); padding: 9px 12px; border-radius: 8px; font-size: 14px; cursor: pointer; }
++.palette-list button.sel { background: var(--grad); color: #fff; }
++
++/* swatches */
++.swatches { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 8px; }
++.swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; }
++.swatch.active { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg2) inset; }
++
++/* insights */
++.insight-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 12px 0; }
++.insight-cards .card { display: flex; flex-direction: column; align-items: center; padding: 14px 8px; }
++.insight-cards b { font-size: 20px; }
++.insight-cards span { font-size: 12px; color: var(--muted); }
++.bar-row { display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; align-items: center; margin: 6px 0; font-size: 13px; }
++.bar-row .bar { height: 8px; background: var(--bg); border-radius: 999px; overflow: hidden; border: 1px solid var(--border); }
++.bar-row .bar > div { height: 100%; background: var(--grad); }
++.day-chart { display: flex; gap: 4px; align-items: flex-end; height: 90px; padding: 8px 0; }
++.day-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 9px; color: var(--muted); }
++.day-bar { width: 100%; max-width: 26px; background: var(--grad); border-radius: 4px 4px 0 0; min-height: 3px; }
++.big-list { margin: 8px 0 0 18px; padding: 0; font-size: 13px; }
++.big-list li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--border); }
++.bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
++
++/* exif table */
++.exif-table { width: 100%; border-collapse: collapse; font-size: 13px; margin: 8px 0; }
++.exif-table td { padding: 5px 8px; border-bottom: 1px dashed var(--border); }
++.exif-table td:first-child { color: var(--muted); width: 40%; }
++
++/* voiceover button recording state */
++#vid-voiceover.recording { background: var(--danger); border-color: var(--danger); animation: pulse 1.2s infinite; }
++
++@media (max-width: 760px) {
++  #bottomnav .nav-item { font-size: 9.5px; }
++  .tools-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
++  #btn-palette { display: none; }
++}
+diff --git a/index.html b/index.html
+index ee6f421..d867a54 100644
+--- a/index.html
+@@ -27,11 +27,12 @@
+         </div>
+       </div>
+       <nav id="side-nav">
+-        <button class="nav-item active" data-tab="chat"><span class="nav-ico">💬</span>Chat</button>
+-        <button class="nav-item" data-tab="files"><span class="nav-ico">📁</span>Files</button>
+-        <button class="nav-item" data-tab="editor"><span class="nav-ico">🎨</span>Editor</button>
+-        <button class="nav-item" data-tab="video"><span class="nav-ico">🎬</span>Image → Video</button>
+-        <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span>Settings</button>
++        <button class="nav-item active" data-tab="chat"><span class="nav-ico">💬</span><span data-i18n="nav.chat">Chat</span></button>
++        <button class="nav-item" data-tab="files"><span class="nav-ico">📁</span><span data-i18n="nav.files">Files</span></button>
++        <button class="nav-item" data-tab="editor"><span class="nav-ico">🎨</span><span data-i18n="nav.editor">Editor</span></button>
++        <button class="nav-item" data-tab="video"><span class="nav-ico">🎬</span><span data-i18n="nav.video">Image → Video</span></button>
++        <button class="nav-item" data-tab="tools"><span class="nav-ico">🧰</span><span data-i18n="nav.tools">Tools</span></button>
++        <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span><span data-i18n="nav.settings">Settings</span></button>
+       </nav>
+       <div class="side-foot">
+         <button id="btn-lock-now" class="btn block" hidden>🔒 Lock now</button>
+@@ -45,6 +46,7 @@
+         <img id="topbar-logo" src="icons/favicon-64.png" alt="">
+         <h1 id="view-title">Chat</h1>
+         <span class="spacer"></span>
++        <button id="btn-palette" class="btn ghost slim" title="Command palette (Ctrl+K)">⌘ Commands</button>
+         <button id="btn-update" class="btn ok slim" hidden>🔄 Update ready — reload</button>
+       </header>
+ 
+@@ -163,6 +165,11 @@
+               <button id="ed-clear-marks" class="btn slim ghost" title="Remove all marks">Clear</button>
+             </div>
+             <div id="emoji-palette" class="emoji-palette" hidden></div>
++            <h3>Magic</h3>
++            <div class="btn-row">
++              <button id="ed-cutout" class="btn">🪄 Remove background</button>
++              <button id="ed-chroma" class="btn">🟩 Chroma key…</button>
++            </div>
+             <h3>Transform</h3>
+             <div class="btn-row">
+               <button id="ed-rot-l" class="btn" title="Rotate left">⟲</button>
+@@ -272,6 +279,7 @@
+             <div class="btn-row">
+               <button id="vid-audio-pick" class="btn slim">🎵 From Files</button>
+               <button id="vid-audio-upload" class="btn ghost slim">⬆️ Upload</button>
++              <button id="vid-voiceover" class="btn slim">🎙 Voiceover</button>
+               <input type="file" id="vid-audio-input" accept="audio/*" hidden>
+             </div>
+             <div id="vid-audio-row" class="audio-row" hidden>
+@@ -310,6 +318,16 @@
+         </div>
+       </section>
+ 
++      <!-- ============ TOOLS ============ -->
++      <section id="view-tools" class="view">
++        <p class="muted" data-i18n="tools.desc">Power tools — generate, convert, compress, inspect</p>
++        <div id="tools-grid" class="tools-grid"></div>
++        <div id="tool-detail" hidden>
++          <button id="tool-back" class="btn ghost" data-i18n="common.back">← All tools</button>
++          <div id="tool-body"></div>
++        </div>
++      </section>
++
+       <!-- ============ SETTINGS ============ -->
+       <section id="view-settings" class="view">
+         <div class="settings-grid">
+@@ -334,6 +352,11 @@
+             <label class="field">Server URL <input id="sync-url" type="url" placeholder="https://your-server.onrender.com"></label>
+             <label class="field">Email <input id="sync-email" type="email" placeholder="you@example.com"></label>
+             <label class="field">Password <input id="sync-pass" type="password"></label>
++            <label class="check" style="margin-top:6px"><input type="checkbox" id="e2ee-on"> 🔐 End-to-end encryption — server stores only ciphertext</label>
++            <div id="e2ee-fields" hidden>
++              <label class="field">Sync passphrase <input id="e2ee-pass" type="password" placeholder="Strong passphrase"></label>
++              <label class="check"><input type="checkbox" id="e2ee-remember" checked> Remember passphrase on this device</label>
++            </div>
+             <div class="btn-row wrap">
+               <button id="sync-signin" class="btn primary">Sign in</button>
+               <button id="sync-register" class="btn">Create account</button>
+@@ -343,6 +366,22 @@
+             <p class="muted" id="sync-status"></p>
+           </div>
+ 
++          <div class="card">
++            <h3 data-i18n="settings.appearance">🎨 Appearance & language</h3>
++            <label class="field" data-i18n-label="settings.theme">Theme
++              <select id="theme-mode">
++                <option value="dark">🌙 Dark</option>
++                <option value="light">☀️ Light</option>
++                <option value="auto">🌗 Auto (system)</option>
++              </select>
++            </label>
++            <label class="field">Accent colour</label>
++            <div class="swatches" id="accent-swatches"></div>
++            <label class="field" data-i18n-label="settings.language">Language
++              <select id="lang-select"></select>
++            </label>
++          </div>
++
+           <div class="card">
+             <h3>🔒 Security</h3>
+             <p class="muted">App lock asks for your PIN (or fingerprint) whenever the app opens.
+@@ -382,11 +421,12 @@
+   </div>
+ 
+   <nav id="bottomnav">
+-    <button class="nav-item active" data-tab="chat"><span class="nav-ico">💬</span><span>Chat</span></button>
+-    <button class="nav-item" data-tab="files"><span class="nav-ico">📁</span><span>Files</span></button>
+-    <button class="nav-item" data-tab="editor"><span class="nav-ico">🎨</span><span>Editor</span></button>
+-    <button class="nav-item" data-tab="video"><span class="nav-ico">🎬</span><span>Video</span></button>
+-    <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span><span>More</span></button>
++    <button class="nav-item active" data-tab="chat"><span class="nav-ico">💬</span><span data-i18n="nav.chat">Chat</span></button>
++    <button class="nav-item" data-tab="files"><span class="nav-ico">📁</span><span data-i18n="nav.files">Files</span></button>
++    <button class="nav-item" data-tab="editor"><span class="nav-ico">🎨</span><span data-i18n="nav.editor">Editor</span></button>
++    <button class="nav-item" data-tab="video"><span class="nav-ico">🎬</span><span data-i18n="nav.video">Video</span></button>
++    <button class="nav-item" data-tab="tools"><span class="nav-ico">🧰</span><span data-i18n="nav.tools">Tools</span></button>
++    <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span><span data-i18n="nav.more">More</span></button>
+   </nav>
+ 
+   <!-- lock screen -->
+diff --git a/js/actions.js b/js/actions.js
+new file mode 100644
+index 0000000..e071951
+--- /dev/null
+@@ -0,0 +1,86 @@
++/* Ayomide Studio — smart assistant actions: chat commands that actually DO things */
++import { allFiles, updateFile } from './db.js';
++import { batchProcess } from './batch.js';
++import { isImage, fmtBytes, emit } from './utils.js';
++
++export async function tryAction(text) {
++  const t = text.toLowerCase();
++
++  // compress all images (optionally to ≤N kb)
++  let m = t.match(/compress|reduce (the )?(size|file)/);
++  if (m && /all|images|photos|pictures/.test(t)) {
++    const kb = (t.match(/(\d+)\s*(kb|kilobyte)/) || [])[1];
++    return runBatch({
++      op: 'compress',
++      targetKB: kb ? +kb : 150,
++      format: 'image/jpeg',
++      label: `compressed (≤${kb || 150}KB)`
++    });
++  }
++
++  // watermark all images
++  m = t.match(/watermark\s+(all|everything|my (images|photos|pictures))\s*(with\s+["“']?(.+?)["”']?)?$/);
++  if (m) {
++    const wmText = (text.match(/["“']([^"”']{1,60})["”']/) || [])[1];
++    if (!wmText) {
++      return { text: 'Sure — what text should the watermark say? Try: “watermark all images with © Ayomide” 💧' };
++    }
++    return runBatch({ op: 'watermark', watermark: { text: wmText, pos: 'br', opacity: 60, size: 30 }, label: 'watermarked' });
++  }
++
++  // convert all images to webp/png/jpeg
++  m = t.match(/convert\s+(all|everything|my)?\s*(images?|photos?|pictures?)?\s*(files?)?\s*to\s+(webp|png|jpe?g)/);
++  if (m) {
++    const fmt = m[4] === 'webp' ? 'image/webp' : m[4] === 'png' ? 'image/png' : 'image/jpeg';
++    return runBatch({ op: 'convert', format: fmt, label: `converted to ${m[4]}` });
++  }
++
++  // resize all images
++  m = t.match(/resize\s+(all|everything|my)\s*(images?|photos?)?\s*(to\s*)?(\d{3,4})\s*(px|pixels)?/);
++  if (m) {
++    return runBatch({ op: 'resize', maxDim: +m[4], label: `resized to ${m[4]}px` });
++  }
++
++  return null;
++}
++
++async function runBatch(opts) {
++  const files = (await allFiles()).filter((f) => isImage(f.type) && !f.vault);
++  if (!files.length) {
++    return { text: 'No (non-vault) images found in Files yet — upload some and try again 📁', actions: [{ label: '📁 Open Files', act: 'nav:files' }] };
++  }
++  emit('nav', 'files');
++  const before = files.reduce((n, f) => n + f.size, 0);
++  let done = 0, ok = 0, after = 0;
++  for (const f of files) {
++    try {
++      const out = await batchProcess([f.blob], opts);
++      if (out[0].ok && out[0].blob.size < f.size * 1.15) {
++        const ext = opts.format === 'image/webp' ? '.webp' : opts.format === 'image/png' ? '.png' : '.jpg';
++        const base = f.name.replace(/\.[^.]+$/, '');
++        await updateFile(f.id, {
++          blob: out[0].blob,
++          size: out[0].blob.size,
++          type: out[0].blob.type,
++          name: base + '-' + (opts.op === 'watermark' ? 'wm' : opts.op) + (opts.format ? ext : (f.name.match(/\.[^.]+$/)?.[0] || '.jpg')),
++          hash: null
++        });
++        after += out[0].blob.size;
++        ok++;
++      } else {
++        after += f.size;
++      }
++    } catch { after += f.size; }
++    done++;
++  }
++  emit('files:changed');
++  const saved = before - after;
++  const { refresh } = await import('./files.js');
++  await refresh();
++  const lines = [
++    `✅ Done! Processed ${ok}/${files.length} image(s) — ${opts.label}.`,
++    saved > 0 ? `Saved ${fmtBytes(saved)} of storage 🎉` : 'Sizes were already optimal for most files.',
++    'Originals were replaced by the results (undo = re-upload). Tip: use the Batch tool for copies + ZIP output.'
++  ];
++  return { text: lines.join('\n') };
++}
+diff --git a/js/aiimage.js b/js/aiimage.js
+new file mode 100644
+index 0000000..d7a9221
+--- /dev/null
+@@ -0,0 +1,130 @@
++/* Ayomide Studio — AI services: text-to-image, OCR, summarization */
++import { kvGet } from './db.js';
++import { toast, blobToDataURL, shrinkImage } from './utils.js';
++
++const STYLES = [
++  { id: '', label: 'None' },
++  { id: 'photorealistic, high detail, 50mm photo', label: '📷 Photo' },
++  { id: 'anime style, vibrant, studio ghibli inspired', label: '🌸 Anime' },
++  { id: 'digital art, concept art, dramatic lighting', label: '🎨 Digital art' },
++  { id: 'watercolor painting, soft edges', label: '🖌️ Watercolor' },
++  { id: '3d render, octane, soft studio light', label: '🧊 3D render' },
++  { id: 'minimalist flat vector illustration', label: '✏️ Flat' },
++  { id: 'cyberpunk, neon, futuristic', label: '🌃 Cyberpunk' },
++  { id: 'african wax print pattern, bold colors', label: '🇳🇬 Ankara' }
++];
++
++export { STYLES };
++
++/* ---- text-to-image ---- */
++export async function generateImage(prompt, { width = 1024, height = 1024 } = {}) {
++  const ai = await kvGet('ai', {});
++  // 1) user's provider (OpenAI-compatible images API)
++  if (ai.enabled && ai.url && ai.key) {
++    try {
++      const res = await fetch(ai.url.replace(/\/+$/, '') + '/images/generations', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ai.key },
++        body: JSON.stringify({ prompt, n: 1, size: `${width}x${height}`, response_format: 'b64_json' })
++      });
++      if (res.ok) {
++        const data = await res.json();
++        const b64 = data.data?.[0]?.b64_json;
++        const url = data.data?.[0]?.url;
++        if (b64) return fetch('data:image/png;base64,' + b64).then((r) => r.blob());
++        if (url) return fetch(url).then((r) => r.blob());
++      }
++    } catch { /* fall through to free endpoint */ }
++  }
++  // 2) free public endpoint (no key)
++  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${width}&height=${height}&nologo=true`;
++  const ctrl = new AbortController();
++  const timer = setTimeout(() => ctrl.abort(), 90000);
++  try {
++    const res = await fetch(url, { signal: ctrl.signal });
++    if (!res.ok) throw new Error('Generation service returned ' + res.status);
++    const blob = await res.blob();
++    if (!blob.type.startsWith('image/') || blob.size < 1000) throw new Error('Generation failed — try again');
++    return blob;
++  } finally {
++    clearTimeout(timer);
++  }
++}
++
++/* ---- OCR ---- */
++export async function ocrImage(blob) {
++  const ai = await kvGet('ai', {});
++  if (ai.enabled && ai.url && ai.key) {
++    const small = await shrinkImage(blob, 1400, 'image/jpeg', 0.85).catch(() => blob);
++    const dataUrl = await blobToDataURL(small);
++    const res = await fetch(ai.url.replace(/\/+$/, '') + '/chat/completions', {
++      method: 'POST',
++      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ai.key },
++      body: JSON.stringify({
++        model: ai.model || 'gpt-4o-mini',
++        messages: [{
++          role: 'user',
++          content: [
++            { type: 'text', text: 'Extract ALL text from this image. Return only the text content, preserving line breaks. If there is no text, return "(none)".' },
++            { type: 'image_url', image_url: { url: dataUrl } }
++          ]
++        }]
++      })
++    });
++    if (!res.ok) throw new Error('OCR via provider failed (HTTP ' + res.status + ')');
++    const data = await res.json();
++    const text = data.choices?.[0]?.message?.content?.trim();
++    if (text && text !== '(none)') return text;
++    return '';
++  }
++  // browser-native detector (rare)
++  if ('TextDetector' in window) {
++    const url = URL.createObjectURL(blob);
++    try {
++      const img = await new Promise((r, j) => { const i = new Image(); i.onload = () => r(i); i.onerror = j; i.src = url; });
++      const det = new window.TextDetector();
++      const results = await det.detect(img);
++      return results.map((r) => r.rawValue).join('\n');
++    } finally { URL.revokeObjectURL(url); }
++  }
++  throw new Error('Connect an AI provider in Settings (OpenAI/Groq/OpenRouter…) to use OCR');
++}
++
++/* ---- summaries ---- */
++export function naiveSummary(text, maxSentences = 3) {
++  const sentences = text.replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+/g) || [text.slice(0, 200)];
++  const freq = new Map();
++  const STOP = new Set('the a an and or of to in is are was were be been it this that for on with as at by from you your i we they he she not but if then than so do does did have has had will would can could'.split(' '));
++  for (const w of text.toLowerCase().match(/[a-z']+/g) || []) {
++    if (STOP.has(w) || w.length < 3) continue;
++    freq.set(w, (freq.get(w) || 0) + 1);
++  }
++  const scored = sentences.map((s, i) => {
++    let score = 0;
++    for (const w of s.toLowerCase().match(/[a-z']+/g) || []) score += freq.get(w) || 0;
++    return { s: s.trim(), score, i };
++  });
++  return scored.sort((a, b) => b.score - a.score).slice(0, maxSentences).sort((a, b) => a.i - b.i).map((x) => '• ' + x.s).join('\n');
++}
++
++export async function summarizeText(text, instruction = 'Summarize this concisely in 3-5 bullet points:') {
++  const ai = await kvGet('ai', {});
++  if (ai.enabled && ai.url && ai.key) {
++    try {
++      const res = await fetch(ai.url.replace(/\/+$/, '') + '/chat/completions', {
++        method: 'POST',
++        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ai.key },
++        body: JSON.stringify({
++          model: ai.model || 'gpt-4o-mini',
++          messages: [{ role: 'user', content: instruction + '\n\n' + text.slice(0, 12000) }]
++        })
++      });
++      if (res.ok) {
++        const data = await res.json();
++        const out = data.choices?.[0]?.message?.content?.trim();
++        if (out) return { text: out, source: 'ai' };
++      }
++    } catch { /* fall back */ }
++  }
++  return { text: 'Offline summary (connect an AI provider for smarter results):\n\n' + naiveSummary(text), source: 'local' };
++}
+diff --git a/js/app.js b/js/app.js
+index b25e62a..3cdba71 100644
+--- a/js/app.js
+@@ -1,34 +1,48 @@
+-/* Ayomide Studio — app shell: nav, lock screen, PWA install, SW, settings, sync wiring */
++/* Ayomide Studio — app shell: nav, tools, theme, i18n, lock screen, PWA, SW, settings, sync */
+ import { $, $$, on, emit, toast, modal, confirmDialog, fmtBytes, sha256Hex } from './utils.js';
+ import * as chat from './chat.js';
+ import * as files from './files.js';
+ import * as editor from './editor.js';
+ import * as video from './video.js';
++import * as tools from './tools.js';
++import { init as initPalette } from './palette.js';
++import { initI18n, setLang, LANGS, t } from './i18n.js';
+ import { clearChat, clearFiles, kvGet, kvSet, storageEstimate, drainShareIn } from './db.js';
+ import { exportEverything } from './exporter.js';
+ import { lockConfig, setupLock, disableLock, verifyPin, unlockVault, vaultReady } from './vault.js';
+-import { initSyncUI } from './sync.js';
++import { initSyncUI, setE2EE } from './sync.js';
+ 
+ const TITLES = {
+-  chat: 'Chat', files: 'Files', editor: 'Image Editor', video: 'Image → Video', settings: 'Settings'
++  chat: 'nav.chat', files: 'files.title', editor: 'editor.title', video: 'video.title',
++  tools: 'tools.title', settings: 'settings.title'
++};
++
++const ACCENTS = {
++  violet: ['#7c5cff', '#22d3ee'],
++  ocean: ['#0ea5e9', '#34d399'],
++  sunset: ['#f97316', '#f43f5e'],
++  pink: ['#ec4899', '#8b5cf6'],
++  green: ['#22c55e', '#22d3ee'],
++  gold: ['#f59e0b', '#f97316']
+ };
+ 
+ let deferredPrompt = null;
+ let swReg = null;
+ let reloading = false;
+ let appUnlocked = false;
++let themeCfg = { mode: 'dark', accent: 'violet' };
+ 
+ /* ---------- navigation ---------- */
+ function nav(tab) {
+   if (!TITLES[tab]) return;
+   $$('.view').forEach((v) => v.classList.toggle('active', v.id === `view-${tab}`));
+   $$('.nav-item').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+-  $('#view-title').textContent = TITLES[tab];
++  $('#view-title').textContent = t(TITLES[tab]);
+ }
+ 
+ /* ---------- boot ---------- */
+ async function boot() {
+-  await Promise.all([chat.init(), files.init(), editor.init(), video.init()]);
++  await Promise.all([chat.init(), files.init(), editor.init(), video.init(), tools.init()]);
+   nav('chat');
+ 
+   $$('.nav-item').forEach((b) => b.addEventListener('click', () => nav(b.dataset.tab)));
+@@ -36,6 +50,15 @@ async function boot() {
+   on('open-editor-with', async ({ id }) => { nav('editor'); await editor.loadFileId(id); });
+   on('open-video-with', async ({ ids }) => { nav('video'); await video.addFileIds(ids); });
+   on('files:changed', updateStorage);
++  on('op', (name) => {
++    if (name === 'toggle-theme') { themeCfg.mode = (document.documentElement.dataset.theme === 'light') ? 'dark' : 'light'; applyTheme(); saveTheme(); }
++    if (name === 'lock') { if (lockConfig()) location.reload(); else toast('Enable app lock first (Settings → Security).', 'warn'); }
++  });
++
++  await initI18n();
++  await initTheme();
++  initAppearanceUI();
++  initPalette();
+ 
+   await initLock();
+   initSecurity();
+@@ -47,9 +70,91 @@ async function boot() {
+   initLaunchQueue();
+   await initSyncUI();
+   updateStorage();
++
++  // deep link (#chat / #video / #tools)
++  const hash = (window.location?.hash || '').replace('#', '');
++  if (TITLES[hash]) nav(hash);
+ }
+ boot();
+ 
++/* ---------- theme ---------- */
++function resolveMode() {
++  if (themeCfg.mode !== 'auto') return themeCfg.mode;
++  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
++}
++
++function applyTheme() {
++  const mode = resolveMode();
++  document.documentElement.dataset.theme = mode;
++  const [a, b] = ACCENTS[themeCfg.accent] || ACCENTS.violet;
++  document.documentElement.style.setProperty('--acc', a);
++  document.documentElement.style.setProperty('--acc2', b);
++  document.documentElement.style.setProperty('--grad', `linear-gradient(135deg, ${a}, ${b})`);
++  const meta = document.querySelector('meta[name="theme-color"]');
++  if (meta) meta.content = mode === 'light' ? '#f2f4fa' : '#0b0d14';
++}
++
++async function saveTheme() {
++  await kvSet('theme', { ...themeCfg });
++}
++
++async function initTheme() {
++  themeCfg = { mode: 'dark', accent: 'violet', ...(await kvGet('theme', {})) };
++  applyTheme();
++  window.matchMedia?.('(prefers-color-scheme: light)').addEventListener?.('change', () => {
++    if (themeCfg.mode === 'auto') applyTheme();
++  });
++}
++
++function initAppearanceUI() {
++  $('#theme-mode').value = themeCfg.mode;
++  $('#theme-mode').addEventListener('change', async (e) => {
++    themeCfg.mode = e.target.value;
++    applyTheme();
++    await saveTheme();
++  });
++
++  const sw = $('#accent-swatches');
++  sw.innerHTML = '';
++  Object.entries(ACCENTS).forEach(([name, [a]]) => {
++    const b = document.createElement('button');
++    b.className = 'swatch' + (themeCfg.accent === name ? ' active' : '');
++    b.style.background = a;
++    b.title = name;
++    b.addEventListener('click', async () => {
++      themeCfg.accent = name;
++      applyTheme();
++      await saveTheme();
++      [...sw.children].forEach((c) => c.classList.remove('active'));
++      b.classList.add('active');
++    });
++    sw.appendChild(b);
++  });
++
++  const langSel = $('#lang-select');
++  LANGS.forEach((l) => {
++    const o = document.createElement('option');
++    o.value = l.id;
++    o.textContent = l.label;
++    langSel.appendChild(o);
++  });
++  langSel.value = (LANGS.find((l) => l.id === document.documentElement.lang) || LANGS[0]).id;
++  langSel.addEventListener('change', () => setLang(langSel.value));
++
++  // E2EE wiring
++  const e2eeOn = $('#e2ee-on');
++  e2eeOn.addEventListener('change', () => { $('#e2ee-fields').hidden = !e2eeOn.checked; });
++  $('#e2ee-pass').addEventListener('change', async () => {
++    if (!e2eeOn.checked) return;
++    await setE2EE(true, $('#e2ee-pass').value, $('#e2ee-remember').checked);
++    $('#e2ee-pass').value = '';
++  });
++  e2eeOn.addEventListener('change', async () => {
++    if (!e2eeOn.checked) await setE2EE(false, null, false);
++    else if (!$('#e2ee-pass').value) toast('Enter a sync passphrase to activate encryption.', 'info', 5000);
++  });
++}
++
+ /* ---------- lock screen ---------- */
+ async function initLock() {
+   const cfg = await lockConfig();
+diff --git a/js/batch.js b/js/batch.js
+new file mode 100644
+index 0000000..bdae643
+--- /dev/null
+@@ -0,0 +1,90 @@
++/* Ayomide Studio — batch image processing core (shared by the batch tool & chat actions) */
++import { loadImage } from './utils.js';
++
++export async function processImage(blob, opts = {}) {
++  const {
++    format = null,        // 'image/webp' | 'image/jpeg' | 'image/png' | null (keep)
++    quality = 0.9,
++    maxDim = null,        // longest side limit
++    targetKB = null,      // smart compress until under this size
++    watermark = null      // {text, pos='br', color='#fff', opacity=55, size=26}
++  } = opts;
++
++  const url = URL.createObjectURL(blob);
++  try {
++    const img = await loadImage(url);
++    let w = img.naturalWidth, h = img.naturalHeight;
++    if (maxDim) {
++      const s = Math.min(1, maxDim / Math.max(w, h));
++      w = Math.max(1, Math.round(w * s));
++      h = Math.max(1, Math.round(h * s));
++    }
++    const c = document.createElement('canvas');
++    c.width = w; c.height = h;
++    const ctx = c.getContext('2d');
++    ctx.imageSmoothingQuality = 'high';
++    ctx.drawImage(img, 0, 0, w, h);
++
++    if (watermark && watermark.text) drawWatermark(ctx, w, h, watermark);
++
++    const fmt = format || (blob.type === 'image/png' ? 'image/png' : 'image/jpeg');
++    let out = await new Promise((res) => c.toBlob(res, fmt, quality));
++
++    if (targetKB && out.size > targetKB * 1024 && fmt !== 'image/png') {
++      // binary search quality, then progressively downscale
++      let lo = 0.25, hi = 0.95, best = out;
++      for (let i = 0; i < 6 && best.size > targetKB * 1024; i++) {
++        const mid = (lo + hi) / 2;
++        const cand = await new Promise((res) => c.toBlob(res, fmt, mid));
++        if (cand.size > targetKB * 1024) hi = mid; else { best = cand; lo = mid; }
++      }
++      let scale = 0.9;
++      while (best.size > targetKB * 1024 && scale > 0.2) {
++        const c2 = document.createElement('canvas');
++        c2.width = Math.max(1, Math.round(w * scale));
++        c2.height = Math.max(1, Math.round(h * scale));
++        const ctx2 = c2.getContext('2d');
++        ctx2.imageSmoothingQuality = 'high';
++        ctx2.drawImage(c, 0, 0, c2.width, c2.height);
++        if (watermark && watermark.text) drawWatermark(ctx2, c2.width, c2.height, watermark);
++        best = await new Promise((res) => c2.toBlob(res, fmt, 0.82));
++        scale -= 0.1;
++      }
++      out = best;
++    }
++    return out;
++  } finally {
++    URL.revokeObjectURL(url);
++  }
++}
++
++export function drawWatermark(ctx, W, H, wm) {
++  const fs = Math.round((wm.size || 26) * (H / 1080) * 1.8);
++  const pad = Math.round(Math.min(W, H) * 0.045);
++  ctx.save();
++  ctx.globalAlpha = (wm.opacity ?? 55) / 100;
++  ctx.font = `600 ${fs}px -apple-system, "Segoe UI", Roboto, sans-serif`;
++  ctx.fillStyle = wm.color || '#fff';
++  ctx.shadowColor = 'rgba(0,0,0,.45)';
++  ctx.shadowBlur = fs * 0.25;
++  const pos = wm.pos || 'br';
++  ctx.textAlign = pos[1] === 'l' ? 'left' : pos[1] === 'r' ? 'right' : 'center';
++  ctx.textBaseline = pos[0] === 't' ? 'top' : pos[0] === 'b' ? 'bottom' : 'middle';
++  const x = pos[1] === 'l' ? pad : pos[1] === 'r' ? W - pad : W / 2;
++  const y = pos[0] === 't' ? pad : pos[0] === 'b' ? H - pad : H / 2;
++  ctx.fillText(wm.text, x, y);
++  ctx.restore();
++}
++
++export async function batchProcess(blobs, opts, onProgress = null) {
++  const results = [];
++  for (let i = 0; i < blobs.length; i++) {
++    try {
++      results.push({ ok: true, blob: await processImage(blobs[i], opts) });
++    } catch (err) {
++      results.push({ ok: false, error: err.message });
++    }
++    onProgress?.(i + 1, blobs.length);
++  }
++  return results;
++}
+diff --git a/js/chat.js b/js/chat.js
+index 0bb03c4..53500c1 100644
+--- a/js/chat.js
+@@ -1,7 +1,10 @@
+-/* Ayomide Studio — chat: threads, voice input, TTS, streaming AI, local assistant */
+-import { $, esc, fmtTime, toast, emit, uid, loadImage, blobToDataURL, shrinkImage, safeMath, speak, stopSpeak } from './utils.js';
+-import { addChat, allChat, clearChat, kvGet, kvSet, allThreads, putThread, deleteThread, putChatRow, deleteChatRow } from './db.js';
++/* Ayomide Studio — chat: threads, voice input, TTS, streaming AI, vision, actions, local assistant */
++import { $, esc, fmtTime, toast, emit, uid, loadImage, blobToDataURL, shrinkImage, safeMath, speak, stopSpeak, isText, modal } from './utils.js';
++import { addChat, allChat, clearChat, kvGet, kvSet, allThreads, putThread, deleteThread, putChatRow, deleteChatRow, allFiles } from './db.js';
+ import { exportEverything } from './exporter.js';
++import { tryAction } from './actions.js';
++import { summarizeText } from './aiimage.js';
++import { openTool } from './tools.js';
+ 
+ let history = [];
+ let threads = [];
+@@ -267,12 +270,39 @@ async function send() {
+   const sb = streamBubble();
+   let finalText = '';
+   let actions = null;
++
++  /* --- smart actions (chat commands that DO things) --- */
+   try {
+-    if (img) {
++    if (/^\/?(summarize|summarise)\b/i.test(text)) {
++      finalText = await summarizeFlow(sb);
++      actions = null;
++    } else {
++      const act = await tryAction(text);
++      if (act) { finalText = act.text; actions = act.actions || null; }
++    }
++  } catch (err) {
++    finalText = '⚠️ ' + err.message;
++  }
++
++  /* --- vision (provider sees the attached image) --- */
++  if (!finalText && img) {
++    const cfg = await kvGet('ai', {});
++    if (cfg.enabled && cfg.url && cfg.key) {
++      try {
++        finalText = await aiVision(cfg, img.dataUrl, text || 'Describe this image in detail.');
++        await typewriter(finalText, sb.set);
++      } catch { /* fall back to local analysis */ }
++    }
++    if (!finalText) {
+       const r = await imageReply(img);
+       finalText = r.text; actions = r.actions || null;
+       await typewriter(finalText, sb.set);
+-    } else {
++    }
++  }
++
++  /* --- normal chat (streaming provider or local brain) --- */
++  if (!finalText) {
++    try {
+       const cfg = await kvGet('ai', {});
+       let streamed = false;
+       if (cfg.enabled && cfg.url && cfg.key) {
+@@ -287,10 +317,10 @@ async function send() {
+         finalText = r.text; actions = r.actions || null;
+         await typewriter(finalText, sb.set);
+       }
++    } catch (err) {
++      finalText = '⚠️ ' + err.message;
++      sb.set(finalText);
+     }
+-  } catch (err) {
+-    finalText = '⚠️ ' + err.message;
+-    sb.set(finalText);
+   }
+ 
+   const row = await addChat({ role: 'assistant', threadId, text: finalText, actions });
+@@ -303,6 +333,58 @@ async function send() {
+   busy = false;
+ }
+ 
++/* pick a text file → summarize it */
++async function summarizeFlow(sb) {
++  const texts = (await allFiles()).filter((f) => !f.vault && isText(f.type, f.name) && f.size < 300_000);
++  if (!texts.length) {
++    return 'No text files found to summarize 📄 — upload one (txt/md/json/code) in the Files tab first, then try again.';
++  }
++  sb.set('Choosing a file…');
++  const rec = await new Promise((resolve) => {
++    const wrap = document.createElement('div');
++    const list = document.createElement('div');
++    list.className = 'btn-row wrap';
++    const m = modal({ title: 'Summarize which file?', body: wrap });
++    texts.forEach((r) => {
++      const b = document.createElement('button');
++      b.className = 'btn';
++      b.textContent = `📄 ${r.name}`;
++      b.addEventListener('click', () => { m.close(); resolve(r); });
++      list.appendChild(b);
++    });
++    wrap.appendChild(list);
++  });
++  if (!rec) return 'Okay — cancelled.';
++  const content = await rec.blob.text();
++  const { text } = await summarizeText(content);
++  await typewriter(text, sb.set);
++  return text;
++}
++
++/* vision via OpenAI-compatible chat completions */
++async function aiVision(cfg, dataUrl, question) {
++  const res = await fetch(cfg.url.replace(/\/+$/, '') + '/chat/completions', {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
++    body: JSON.stringify({
++      model: cfg.model || 'gpt-4o-mini',
++      max_tokens: 700,
++      messages: [{
++        role: 'user',
++        content: [
++          { type: 'text', text: question },
++          { type: 'image_url', image_url: { url: dataUrl } }
++        ]
++      }]
++    })
++  });
++  if (!res.ok) throw new Error('vision HTTP ' + res.status);
++  const data = await res.json();
++  const out = data.choices?.[0]?.message?.content?.trim();
++  if (!out) throw new Error('empty vision response');
++  return out;
++}
++
+ async function typewriter(text, set) {
+   const step = Math.max(1, Math.round(text.length / 140));
+   for (let i = step; i < text.length; i += step) {
+@@ -407,6 +489,69 @@ function localReply(raw) {
+   }
+ 
+   const R = [
++    {
++      re: /(generate|create|make|draw).{0,24}(image|picture|art|logo|wallpaper)/,
++      reply: () => ({
++        text: "🖌️ I can do that! The AI Image Generator turns a description into a real image — free, no API key needed. From there you can edit it, watermark it, or drop it straight into a video.",
++        actions: [{ label: '🖌️ Generate an image', act: 'tool:ai-image' }]
++      })
++    },
++    {
++      re: /\bgif\b/,
++      reply: () => ({
++        text: "🎞️ The GIF Maker turns images (or video clips) into animated GIFs — pick frames, speed and width, done.",
++        actions: [{ label: '🎞️ Make a GIF', act: 'tool:gif' }]
++      })
++    },
++    {
++      re: /\bqr\b|barcode/,
++      reply: () => ({
++        text: "📱 QR Studio generates styled QR codes (your colours, even your logo in the middle) and can scan QR images on supported phones.",
++        actions: [{ label: '📱 Open QR Studio', act: 'tool:qr' }]
++      })
++    },
++    {
++      re: /\bpdf\b/,
++      reply: () => ({
++        text: "📕 Images → PDF: pick your photos/scans and get one clean PDF — one page per image. Perfect for documents and receipts.",
++        actions: [{ label: '📕 Create a PDF', act: 'tool:pdf' }]
++      })
++    },
++    {
++      re: /\bocr\b|extract (the )?text|read (the )?text|scan(ned)? (doc|document)/,
++      reply: () => ({
++        text: "🔤 OCR pulls text out of photos and scanned documents. It uses your connected AI provider (connect one in Settings for best results).",
++        actions: [{ label: '🔤 Extract text', act: 'tool:ocr' }]
++      })
++    },
++    {
++      re: /exif|gps|location data|metadata/,
++      reply: () => ({
++        text: "🕵️ The EXIF tool shows hidden photo metadata (GPS location, camera, timestamps) and strips it with one tap — share safely.",
++        actions: [{ label: '🕵️ Check a photo', act: 'tool:exif' }]
++      })
++    },
++    {
++      re: /collage|grid of photos|combine (photos|images)/,
++      reply: () => ({
++        text: "🖼️ The Collage Maker combines 2–6 photos into layouts (grid, feature, strips) with gaps, colours and rounded corners.",
++        actions: [{ label: '🖼️ Make a collage', act: 'tool:collage' }]
++      })
++    },
++    {
++      re: /trim|cut (a )?video|video (to )?shorter/,
++      reply: () => ({
++        text: "✂️ The Video Trimmer cuts any stored video — set start/end, change speed (0.5×–2×), optionally mute, then export.",
++        actions: [{ label: '✂️ Trim a video', act: 'tool:trim' }]
++      })
++    },
++    {
++      re: /batch|compress all|convert all|resize all|watermark all/,
++      reply: () => ({
++        text: "⚡ Batch Tools process many images at once — convert (WebP/JPEG/PNG), resize, smart-compress to a KB target, or watermark everything. You can also just tell me directly, e.g. “compress all images to 100kb” or “watermark all images with © Ayomide”.",
++        actions: [{ label: '⚡ Open Batch Tools', act: 'tool:batch' }]
++      })
++    },
+     {
+       re: /voice|speak|microphone|talk to you|say it/,
+       reply: () => ({
+@@ -590,6 +735,7 @@ export async function resetChat() {
+ 
+ async function runAction(act) {
+   if (act.startsWith('nav:')) emit('nav', act.slice(4));
++  else if (act.startsWith('tool:')) openTool(act.slice(5));
+   else if (act === 'op:upload') { emit('nav', 'files'); setTimeout(() => emit('op', 'upload'), 80); }
+   else if (act === 'op:export') exportEverything();
+   else if (act === 'op:clear') {
+diff --git a/js/editor.js b/js/editor.js
+index 96caff6..d0921b5 100644
+--- a/js/editor.js
+@@ -88,6 +88,9 @@ export async function init() {
+   $('#ed-undo').addEventListener('click', undo);
+   $('#ed-redo').addEventListener('click', redo);
+   $('#ed-new').addEventListener('click', () => { st = null; history = []; hIndex = -1; showStage(false); });
++
++  $('#ed-cutout').addEventListener('click', cutoutBackground);
++  $('#ed-chroma').addEventListener('click', chromaKeyModal);
+ }
+ 
+ function state() { return st; }
+@@ -650,3 +653,108 @@ function showStage(show) {
+   $('#editor-placeholder').style.display = show ? 'none' : 'block';
+   $('#editor-stage').hidden = !show;
+ }
++
++/* ---------- magic: cutout & chroma key (baked into a new base) ---------- */
++function baseOutCanvas() {
++  const { w, h } = outDims();
++  const c = document.createElement('canvas');
++  c.width = w; c.height = h;
++  const ctx = c.getContext('2d');
++  ctx.imageSmoothingQuality = 'high';
++  const fs = filterString();
++  if (fs) ctx.filter = fs;
++  drawGeometry(ctx, w, h);
++  ctx.filter = 'none';
++  return c;
++}
++
++async function bake(canvas) {
++  const blob = await new Promise((res) => canvas.toBlob(res, 'image/png'));
++  const url = URL.createObjectURL(blob);
++  try {
++    st.img = await loadImage(url);
++  } finally {
++    URL.revokeObjectURL(url);
++  }
++  st.crop = null;
++  st.scaleTo = null;
++  mutate({});
++}
++
++function cutoutBackground() {
++  if (!st) { toast('Load an image first ✨', 'warn'); return; }
++  const c = baseOutCanvas();
++  const ctx = c.getContext('2d');
++  const W = c.width, H = c.height;
++  const img = ctx.getImageData(0, 0, W, H);
++  const d = img.data;
++  const tol = 44 * 44 * 3;
++  const visited = new Uint8Array(W * H);
++  const stack = [];
++  const seeds = [];
++  for (let x = 0; x < W; x++) { seeds.push(x, x + (H - 1) * W); }
++  for (let y = 0; y < H; y++) { seeds.push(y * W, W - 1 + y * W); }
++  for (const si of seeds) {
++    if (visited[si]) continue;
++    const sr = d[si * 4], sg = d[si * 4 + 1], sb = d[si * 4 + 2];
++    stack.push(si);
++    visited[si] = 1;
++    while (stack.length) {
++      const i = stack.pop();
++      const p = i * 4;
++      const dr = d[p] - sr, dg = d[p + 1] - sg, db = d[p + 2] - sb;
++      if (dr * dr + dg * dg + db * db > tol) continue;
++      d[p + 3] = 0;
++      const x = i % W, y = (i / W) | 0;
++      if (x > 0 && !visited[i - 1]) { visited[i - 1] = 1; stack.push(i - 1); }
++      if (x < W - 1 && !visited[i + 1]) { visited[i + 1] = 1; stack.push(i + 1); }
++      if (y > 0 && !visited[i - W]) { visited[i - W] = 1; stack.push(i - W); }
++      if (y < H - 1 && !visited[i + W]) { visited[i + W] = 1; stack.push(i + W); }
++    }
++  }
++  ctx.putImageData(img, 0, 0);
++  bake(c).then(() => toast('Background removed 🪄 — best on plain/solid backgrounds. Undo won\'t revert a bake; use ＋ New to reload.', 'info', 6000));
++}
++
++function chromaKeyModal() {
++  if (!st) { toast('Load an image first ✨', 'warn'); return; }
++  const body = document.createElement('div');
++  body.innerHTML = `
++    <p class="muted">Replaces a colour (e.g. a green screen) everywhere in the image.</p>
++    <div class="row">
++      <label class="inline">Colour <input type="color" id="ck-color" value="#22c55e"></label>
++      <label class="inline grow">Tolerance <input type="range" id="ck-tol" min="4" max="120" value="42"></label>
++    </div>
++    <label class="check"><input type="checkbox" id="ck-trans" checked> Make transparent (uncheck → replace with the colour)</label>`;
++  modal({
++    title: '🟩 Chroma key',
++    body,
++    actions: [
++      { label: 'Cancel', cls: 'ghost' },
++      {
++        label: 'Apply', cls: 'primary', onClick: async (close) => {
++          close();
++          const color = body.querySelector('#ck-color').value;
++          const tol = +body.querySelector('#ck-tol').value;
++          const transparent = body.querySelector('#ck-trans').checked;
++          const [tr, tg, tb] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
++          const c = baseOutCanvas();
++          const ctx = c.getContext('2d');
++          const img = ctx.getImageData(0, 0, c.width, c.height);
++          const d = img.data;
++          const lim = tol * tol * 3;
++          for (let p = 0; p < d.length; p += 4) {
++            const dr = d[p] - tr, dg = d[p + 1] - tg, db = d[p + 2] - tb;
++            if (dr * dr + dg * dg + db * db <= lim) {
++              if (transparent) d[p + 3] = 0;
++              else { d[p] = tr; d[p + 1] = tg; d[p + 2] = tb; }
++            }
++          }
++          ctx.putImageData(img, 0, 0);
++          await bake(c);
++          toast('Chroma key applied 🟩', 'ok');
++        }
++      }
++    ]
++  });
++}
+diff --git a/js/exif.js b/js/exif.js
+new file mode 100644
+index 0000000..c412282
+--- /dev/null
+@@ -0,0 +1,142 @@
++/* Ayomide Studio — JPEG EXIF parser & stripper (privacy: remove GPS/camera data) */
++
++const TAG_NAMES = {
++  0x10F: 'Camera make', 0x110: 'Camera model', 0x112: 'Orientation', 0x131: 'Software',
++  0x132: 'Date & time', 0x9003: 'Date taken', 0x8827: 'ISO', 0x829D: 'Aperture (f-number)',
++  0x829A: 'Exposure time', 0x920A: 'Focal length', 0xA002: 'Pixel width', 0xA003: 'Pixel height'
++};
++
++const TYPE_SIZES = { 1: 1, 2: 1, 3: 2, 4: 4, 5: 8, 7: 1, 9: 4, 10: 8 };
++
++function readValue(view, tiffStart, entry, little) {
++  const type = view.getUint16(entry + 2, little);
++  const count = view.getUint32(entry + 4, little);
++  const size = (TYPE_SIZES[type] || 1) * count;
++  let off = entry + 8;
++  if (size > 4) off = tiffStart + view.getUint32(entry + 8, little);
++  try {
++    if (type === 2) { // ascii
++      let s = '';
++      for (let i = 0; i < count - 1 && i < 64; i++) s += String.fromCharCode(view.getUint8(off + i));
++      return s.trim();
++    }
++    if (type === 3) return view.getUint16(off, little);
++    if (type === 4) return view.getUint32(off, little);
++    if (type === 5) { // rational
++      const num = view.getUint32(off, little);
++      const den = view.getUint32(off + 4, little);
++      return den ? num / den : null;
++    }
++    if (type === 1) return view.getUint8(off);
++  } catch { return null; }
++  return null;
++}
++
++function parseIFD(view, tiffStart, ifdOffset, little, out) {
++  const entryCount = view.getUint16(tiffStart + ifdOffset, little);
++  const GPS_REF = { 1: 0x1, 2: 0x2, 3: 0x3, 4: 0x4 };
++  for (let i = 0; i < entryCount && i < 200; i++) {
++    const entry = tiffStart + ifdOffset + 2 + i * 12;
++    const tag = view.getUint16(entry, little);
++    if (tag === 0x8769) { // Exif sub-IFD
++      const sub = view.getUint32(entry + 8, little);
++      if (sub) parseIFD(view, tiffStart, sub, little, out);
++      continue;
++    }
++    if (tag === 0x8825) { // GPS sub-IFD
++      const sub = view.getUint32(entry + 8, little);
++      if (sub) parseGPS(view, tiffStart, sub, little, out);
++      continue;
++    }
++    const name = TAG_NAMES[tag];
++    if (!name) continue;
++    const v = readValue(view, tiffStart, entry, little);
++    if (v === null || v === undefined || v === '') continue;
++    out.tags.push({ label: name, value: v });
++  }
++}
++
++function parseGPS(view, tiffStart, ifdOffset, little, out) {
++  const count = view.getUint16(tiffStart + ifdOffset, little);
++  const vals = {};
++  for (let i = 0; i < count && i < 40; i++) {
++    const entry = tiffStart + ifdOffset + 2 + i * 12;
++    const tag = view.getUint16(entry, little);
++    vals[tag] = readValue(view, tiffStart, entry, little);
++    // rationals of 3 components: read manually
++    if (tag === 2 || tag === 4) {
++      const type = view.getUint16(entry + 2, little);
++      if (type === 5) {
++        const n = view.getUint32(entry + 4, little);
++        const base = tiffStart + view.getUint32(entry + 8, little);
++        const parts = [];
++        for (let j = 0; j < Math.min(3, n); j++) {
++          const num = view.getUint32(base + j * 8, little);
++          const den = view.getUint32(base + j * 8 + 4, little);
++          parts.push(den ? num / den : 0);
++        }
++        vals[tag] = parts;
++      }
++    }
++  }
++  const lat = vals[2], lon = vals[4];
++  if (Array.isArray(lat) && Array.isArray(lon)) {
++    const dms = (a) => a[0] + (a[1] || 0) / 60 + (a[2] || 0) / 3600;
++    let la = dms(lat), lo = dms(lon);
++    if (vals[1] === 'S' || vals[1] === 's') la = -la;
++    if (vals[3] === 'W' || vals[3] === 'w') lo = -lo;
++    out.gps = { lat: la, lon: lo };
++  }
++  if (vals[6] != null) out.tags.push({ label: 'Altitude (m)', value: Math.round(vals[6]) });
++}
++
++export async function parseExif(blob) {
++  const buf = new Uint8Array(await blob.arrayBuffer());
++  const view = new DataView(buf.buffer);
++  const out = { tags: [], gps: null, hasExif: false, size: buf.length };
++  if (buf[0] !== 0xFF || buf[1] !== 0xD8) return out;
++
++  let pos = 2;
++  while (pos + 4 < buf.length) {
++    if (buf[pos] !== 0xFF) break;
++    const marker = buf[pos + 1];
++    if (marker === 0xD8 || (marker >= 0xD0 && marker <= 0xD9)) { pos += 2; continue; }
++    const len = view.getUint16(pos + 2);
++    if (marker === 0xE1 && pos + 4 + 6 <= buf.length) {
++      const sig = String.fromCharCode(...buf.subarray(pos + 4, pos + 10));
++      if (sig.startsWith('Exif')) {
++        out.hasExif = true;
++        const tiffStart = pos + 10;
++        const little = buf[tiffStart] === 0x49;
++        const ifd0 = view.getUint32(tiffStart + 4, little);
++        try { parseIFD(view, tiffStart, ifd0, little, out); } catch { }
++      }
++    }
++    if (marker === 0xDA) break; // scan (image data) — done with metadata
++    pos += 2 + len;
++  }
++  return out;
++}
++
++/* Remove Exif APP1 segments — returns clean JPEG blob */
++export async function stripExif(blob) {
++  const buf = new Uint8Array(await blob.arrayBuffer());
++  const view = new DataView(buf.buffer);
++  if (buf[0] !== 0xFF || buf[1] !== 0xD8) throw new Error('Not a JPEG');
++  const parts = [buf.subarray(0, 2)];
++  let pos = 2;
++  let removed = 0;
++  while (pos + 4 < buf.length) {
++    if (buf[pos] !== 0xFF) break;
++    const marker = buf[pos + 1];
++    if (marker === 0xDA) { parts.push(buf.subarray(pos)); break; }
++    const len = view.getUint16(pos + 2);
++    const isExifApp1 = marker === 0xE1 &&
++      String.fromCharCode(...buf.subarray(pos + 4, Math.min(pos + 10, buf.length))).startsWith('Exif');
++    if (!isExifApp1) parts.push(buf.subarray(pos, pos + 2 + len));
++    else removed++;
++    pos += 2 + len;
++  }
++  const clean = new Blob(parts, { type: 'image/jpeg' });
++  return { blob: clean, removed };
++}
+diff --git a/js/gif.js b/js/gif.js
+new file mode 100644
+index 0000000..8a34bcf
+--- /dev/null
+@@ -0,0 +1,192 @@
++/* Ayomide Studio — animated GIF encoder (median-cut palette + LZW, zero deps) + GIF maker tool core */
++
++/* ---- median cut quantizer ---- */
++export function buildPalette(rgba, maxColors = 255) {
++  const pixels = [];
++  for (let i = 0; i < rgba.length; i += 4) {
++    if (rgba[i + 3] < 128) continue;
++    pixels.push([(rgba[i] >> 4) << 4, (rgba[i + 1] >> 4) << 4, (rgba[i + 2] >> 4) << 4]);
++  }
++  const sample = [];
++  const step = Math.max(1, Math.floor(pixels.length / 20000));
++  for (let i = 0; i < pixels.length; i += step) sample.push(pixels[i]);
++
++  let boxes = [sample];
++  while (boxes.length < maxColors) {
++    // split the box with the largest channel range
++    let bi = -1, br = -1;
++    boxes.forEach((box, i) => {
++      if (box.length < 2) return;
++      for (let ch = 0; ch < 3; ch++) {
++        let lo = 255, hi = 0;
++        for (const p of box) { lo = Math.min(lo, p[ch]); hi = Math.max(hi, p[ch]); }
++        if (hi - lo > br) { br = hi - lo; bi = i; }
++      }
++    });
++    if (bi < 0 || br <= 0) break;
++    const box = boxes[bi];
++    const ch = box.reduce((a, p) => {
++      const ranges = [0, 1, 2].map((c) => {
++        let lo = 255, hi = 0;
++        for (const q of box) { lo = Math.min(lo, q[c]); hi = Math.max(hi, q[c]); }
++        return hi - lo;
++      });
++      return ranges.indexOf(Math.max(...ranges));
++    }, 0);
++    box.sort((a, b) => a[ch] - b[ch]);
++    const mid = box.length >> 1;
++    boxes.splice(bi, 1, box.slice(0, mid), box.slice(mid));
++  }
++
++  const palette = [];
++  const cache = new Map();
++  for (const box of boxes) {
++    if (!box.length) continue;
++    let r = 0, g = 0, b = 0;
++    for (const p of box) { r += p[0]; g += p[1]; b += p[2]; }
++    palette.push([Math.round(r / box.length), Math.round(g / box.length), Math.round(b / box.length)]);
++  }
++  if (!palette.length) palette.push([0, 0, 0]);
++  return palette;
++}
++
++export function mapToPalette(rgba, palette) {
++  const n = rgba.length / 4;
++  const out = new Uint8Array(n);
++  const cache = new Map();
++  for (let i = 0, j = 0; i < rgba.length; i += 4, j++) {
++    const r = rgba[i], g = rgba[i + 1], b = rgba[i + 2];
++    const key = (r << 16) | (g << 8) | b;
++    let idx = cache.get(key);
++    if (idx === undefined) {
++      let bd = Infinity;
++      idx = 0;
++      for (let p = 0; p < palette.length; p++) {
++        const dr = palette[p][0] - r, dg = palette[p][1] - g, db = palette[p][2] - b;
++        const d = dr * dr + dg * dg + db * db;
++        if (d < bd) { bd = d; idx = p; }
++      }
++      cache.set(key, idx);
++    }
++    out[j] = rgba[i + 3] < 128 ? 255 : idx; // 255 reserved as transparent
++  }
++  return out;
++}
++
++/* ---- GIF LZW compressor (min code size 8) ---- */
++function lzw(indices, minCodeSize = 8) {
++  const clearCode = 1 << minCodeSize;
++  const eoiCode = clearCode + 1;
++  let codeSize = minCodeSize + 1;
++  let dict = new Map();
++  let nextCode = eoiCode + 1;
++
++  const out = [];
++  let cur = 0, curBits = 0;
++  const emit = (code) => {
++    cur |= code << curBits;      // GIF packs codes LSB-first
++    curBits += codeSize;
++    while (curBits >= 8) {
++      out.push(cur & 255);
++      cur >>= 8;
++      curBits -= 8;
++    }
++  };
++
++  emit(clearCode);
++  let prefix = null;
++  for (const k of indices) {
++    if (prefix === null) { prefix = k; continue; }
++    const key = (prefix << 12) | k;
++    const found = dict.get(key);
++    if (found !== undefined) {
++      prefix = found;
++    } else {
++      emit(prefix);
++      if (nextCode === 4096) {
++        emit(clearCode);
++        dict = new Map();
++        nextCode = eoiCode + 1;
++        codeSize = minCodeSize + 1;
++      } else {
++        dict.set(key, nextCode++);
++        if (nextCode > (1 << codeSize) - 1 && codeSize < 12) codeSize++;
++      }
++      prefix = k;
++    }
++  }
++  if (prefix !== null) emit(prefix);
++  emit(eoiCode);
++  if (curBits > 0) out.push(cur & 255);
++  return out;
++}
++
++/* ---- GIF assembly ---- */
++export function encodeGif(frames, { width, height, loop = true, transparentIndex = 255, palette = null } = {}) {
++  /* frames: [{indices: Uint8Array, delayCs}], palette required (or frames[0].rgba to derive one) */
++  const pal = palette || buildPalette(frames[0].rgba || new Uint8Array(0));
++  const bytes = [];
++
++  const w16 = (v) => bytes.push(v & 255, (v >> 8) & 255);
++
++  // header
++  for (const c of 'GIF89a') bytes.push(c.charCodeAt(0));
++  w16(width); w16(height);
++  bytes.push(0xF0 | 7); // GCT flag, 256 colors
++  bytes.push(0, 0);     // bg, aspect
++  for (const [r, g, b] of pal) bytes.push(r, g, b);
++  while (bytes.length < 13 + 256 * 3) bytes.push(0);
++
++  if (loop) {
++    for (const c of 'NETSCAPE2.0') bytes.push(c.charCodeAt(0));
++    bytes.push(3, 1, 0, 0, 0);
++  }
++
++  for (const f of frames) {
++    // graphic control extension
++    bytes.push(0x21, 0xF9, 4);
++    bytes.push(f.transparent ? 0x01 : 0x00); // transparency flag
++    w16(f.delayCs ?? 10);
++    bytes.push(f.transparent ? transparentIndex : 0);
++    bytes.push(0);
++
++    // image descriptor
++    bytes.push(0x2C);
++    w16(0); w16(0); w16(width); w16(height);
++    bytes.push(0); // no LCT
++
++    bytes.push(8); // LZW min code size
++    const data = lzw(f.indices, 8);
++    for (let i = 0; i < data.length; i += 255) {
++      const chunk = data.slice(i, i + 255);
++      bytes.push(chunk.length, ...chunk);
++    }
++    bytes.push(0); // block terminator
++  }
++
++  bytes.push(0x3B); // trailer
++  return new Blob([new Uint8Array(bytes)], { type: 'image/gif' });
++}
++
++/* ---- helper: canvas frames -> gif ---- */
++export async function canvasFramesToGif(canvases, { fps = 10, loop = true, transparent = false } = {}) {
++  if (!canvases.length) throw new Error('No frames');
++  const w = canvases[0].width;
++  const h = canvases[0].height;
++  // build a global palette from a sample of all frames
++  let sample = new Uint8Array(0);
++  const per = Math.max(1, Math.floor(canvases.length / 4));
++  for (let i = 0; i < canvases.length; i += per) {
++    const d = canvases[i].getContext('2d').getImageData(0, 0, w, h).data;
++    const merged = new Uint8Array(sample.length + d.length);
++    merged.set(sample); merged.set(d, sample.length);
++    sample = merged;
++  }
++  const palette = buildPalette(sample, 255);
++  const delayCs = Math.round(100 / fps);
++  const frames = canvases.map((c) => {
++    const rgba = c.getContext('2d').getImageData(0, 0, w, h).data;
++    return { indices: mapToPalette(rgba, palette), delayCs, transparent, rgba };
++  });
++  return encodeGif(frames, { width: w, height: h, loop, palette });
++}
+diff --git a/js/i18n.js b/js/i18n.js
+new file mode 100644
+index 0000000..a367410
+--- /dev/null
+@@ -0,0 +1,84 @@
++/* Ayomide Studio — i18n (English / Yorùbá / Nigerian Pidgin) */
++import { $, $$, emit } from './utils.js';
++import { kvGet, kvSet } from './db.js';
++
++const DICT = {
++  en: {
++    'nav.chat': 'Chat', 'nav.files': 'Files', 'nav.editor': 'Editor', 'nav.video': 'Image → Video',
++    'nav.tools': 'Tools', 'nav.settings': 'Settings', 'nav.more': 'More',
++    'chat.placeholder': 'Message Ayomide Assistant…', 'chat.new': '＋ New',
++    'files.title': 'Files', 'files.upload': 'Choose files', 'files.drop': 'Drop files here',
++    'files.exportall': '📦 Export all (.zip)', 'files.select': '☑️ Select', 'files.allfiles': '📂 All files',
++    'editor.title': 'Image Editor', 'video.title': 'Image → Video', 'settings.title': 'Settings',
++    'tools.title': 'Tools', 'tools.desc': 'Power tools — generate, convert, compress, inspect',
++    'settings.appearance': '🎨 Appearance & language', 'settings.theme': 'Theme',
++    'settings.theme.dark': 'Dark', 'settings.theme.light': 'Light', 'settings.theme.auto': 'Auto (system)',
++    'settings.accent': 'Accent colour', 'settings.language': 'Language',
++    'settings.install': '📲 Install app', 'settings.updates': '🔄 Check for updates',
++    'common.save': 'Save', 'common.cancel': 'Cancel', 'common.close': 'Close', 'common.download': '⬇️ Download',
++    'common.savetofiles': '💾 Save to Files', 'common.back': '← All tools'
++  },
++  yo: {
++    'nav.chat': 'Ọ̀rọ̀', 'nav.files': 'Awọn faìlì', 'nav.editor': 'Oún Ṣààyẹ̀wò', 'nav.video': 'Àwòrán → Fídíò',
++    'nav.tools': 'Ohun Èlò', 'nav.settings': 'Àtúnṣe', 'nav.more': 'Si tọ',
++    'chat.placeholder': 'Sọ̀rọ̀ sí Ayomide Assistant…', 'chat.new': '＋ Tuntun',
++    'files.title': 'Awọn faìlì', 'files.upload': 'Yan awọn faìlì', 'files.drop': 'Gbé wọ́n sí ibí',
++    'files.exportall': '📦 Gbójọ gbé (.zip)', 'files.select': '☑️ Yan', 'files.allfiles': '📂Gbogbo rẹ̀',
++    'editor.title': 'Àyẹ̀wò àwòrán', 'video.title': 'Àwòrán → Fídíò', 'settings.title': 'Àtúnṣe',
++    'tools.title': 'Ohun èlò', 'tools.desc': 'Ohun èlò agbara — ṣẹ̀dá, yí padà, díndínrupa, wo inú rẹ̀',
++    'settings.appearance': '🎨 Ìrí & èdè', 'settings.theme': 'Ìrí',
++    'settings.theme.dark': 'Ìsálẹ̀ dúdú', 'settings.theme.light': 'Ìsálẹ̀ funfun', 'settings.theme.auto': 'Ìṣerúra (eto)',
++    'settings.accent': 'Àwọ̀ pàtàkì', 'settings.language': 'Èdè',
++    'settings.install': '📲 Fi s\'óri ibi ìṣàmúlò', 'settings.updates': '🔄 Ṣe àwárí ìmúlò tuntun',
++    'common.save': 'Fi pamọ́', 'common.cancel': 'Fagilé', 'common.close': 'Ti', 'common.download': '⬇️ Gbà wá',
++    'common.savetofiles': '💾 Fi pamọ́ sí àwọn faìlì', 'common.back': '← Gbogbo ohun èlò'
++  },
++  pcm: {
++    'nav.chat': 'Chat', 'nav.files': 'Files', 'nav.editor': 'Editor', 'nav.video': 'Picture → Video',
++    'nav.tools': 'Tools', 'nav.settings': 'Settings', 'nav.more': 'More',
++    'chat.placeholder': 'Talk to Ayomide Assistant…', 'chat.new': '＋ New',
++    'files.title': 'Files', 'files.upload': 'Choose files', 'files.drop': 'Drop files here',
++    'files.exportall': '📦 Pack everything (.zip)', 'files.select': '☑️ Select', 'files.allfiles': '📂 Everything',
++    'editor.title': 'Picture Editor', 'video.title': 'Picture → Video', 'settings.title': 'Settings',
++    'tools.title': 'Tools', 'tools.desc': 'Power tools — make, convert, squeeze, check',
++    'settings.appearance': '🎨 Look & language', 'settings.theme': 'Theme',
++    'settings.theme.dark': 'Dark', 'settings.theme.light': 'Light', 'settings.theme.auto': 'Follow system',
++    'settings.accent': 'Accent colour', 'settings.language': 'Language',
++    'settings.install': '📲 Install app', 'settings.updates': '🔄 Check for update',
++    'common.save': 'Save am', 'common.cancel': 'Cancel', 'common.close': 'Close', 'common.download': '⬇️ Download',
++    'common.savetofiles': '💾 Save to Files', 'common.back': '← All tools'
++  }
++};
++
++export const LANGS = [
++  { id: 'en', label: 'English' },
++  { id: 'yo', label: 'Yorùbá' },
++  { id: 'pcm', label: 'Nigerian Pidgin' }
++];
++
++let current = 'en';
++
++export function t(key) {
++  return (DICT[current] && DICT[current][key]) || DICT.en[key] || key;
++}
++
++export function applyLang(lang) {
++  current = DICT[lang] ? lang : 'en';
++  $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
++  $$('[data-i18n-ph]').forEach((el) => { el.placeholder = t(el.dataset.i18nPh); });
++  document.documentElement.lang = current === 'yo' ? 'yo' : current === 'pcm' ? 'pcm' : 'en';
++}
++
++export async function setLang(lang) {
++  await kvSet('lang', lang);
++  applyLang(lang);
++  emit('lang:changed', lang);
++}
++
++export async function initI18n() {
++  const lang = await kvGet('lang', 'en');
++  applyLang(lang);
++  return lang;
++}
++
++export function currentLang() { return current; }
+diff --git a/js/palette.js b/js/palette.js
+new file mode 100644
+index 0000000..30d43d3
+--- /dev/null
+@@ -0,0 +1,78 @@
++/* Ayomide Studio — command palette (Ctrl+K / ⌘K) */
++import { $, $$, esc, emit, on } from './utils.js';
++import { toolIds, openTool } from './tools.js';
++
++const COMMANDS = () => [
++  { icon: '💬', label: 'Go to Chat', run: () => emit('nav', 'chat') },
++  { icon: '📁', label: 'Go to Files', run: () => emit('nav', 'files') },
++  { icon: '🎨', label: 'Go to Editor', run: () => emit('nav', 'editor') },
++  { icon: '🎬', label: 'Go to Image → Video', run: () => emit('nav', 'video') },
++  { icon: '🧰', label: 'Go to Tools', run: () => emit('nav', 'tools') },
++  { icon: '⚙️', label: 'Go to Settings', run: () => emit('nav', 'settings') },
++  ...toolIds().map((t) => ({ icon: t.icon, label: 'Tool: ' + t.name, run: () => openTool(t.id) })),
++  { icon: '📤', label: 'Upload files', run: () => { emit('nav', 'files'); setTimeout(() => emit('op', 'upload'), 80); } },
++  { icon: '📦', label: 'Export everything (.zip)', run: () => import('./exporter.js').then((m) => m.exportEverything()) },
++  { icon: '🌓', label: 'Toggle light / dark theme', run: () => emit('op', 'toggle-theme') },
++  { icon: '🔒', label: 'Lock the app now', run: () => emit('op', 'lock') }
++];
++
++let overlay = null;
++
++export function init() {
++  window.addEventListener('keydown', (e) => {
++    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
++      e.preventDefault();
++      open();
++    }
++  });
++  const btn = $('#btn-palette');
++  if (btn) btn.addEventListener('click', open);
++}
++
++function open() {
++  close();
++  overlay = document.createElement('div');
++  overlay.className = 'modal-back palette-back';
++  overlay.innerHTML = `
++    <div class="palette">
++      <input placeholder="Type a command… (↑↓ + Enter)" autocomplete="off">
++      <div class="palette-list"></div>
++    </div>`;
++  $('#modal-root').appendChild(overlay);
++  const input = overlay.querySelector('input');
++  const list = overlay.querySelector('.palette-list');
++  let sel = 0;
++  let items = [];
++
++  const render = (q) => {
++    const all = COMMANDS();
++    items = q ? all.filter((c) => c.label.toLowerCase().includes(q)) : all;
++    sel = Math.min(sel, Math.max(0, items.length - 1));
++    list.innerHTML = items.map((c, i) =>
++      `<button data-i="${i}" class="${i === sel ? 'sel' : ''}">${c.icon} ${esc(c.label)}</button>`).join('') ||
++      '<p class="muted" style="padding:10px">No matching command.</p>';
++    [...list.querySelectorAll('button')].forEach((b) => {
++      b.addEventListener('click', () => pick(+b.dataset.i));
++      b.addEventListener('mousemove', () => { sel = +b.dataset.i; mark(); });
++    });
++  };
++  const mark = () => [...list.querySelectorAll('button')].forEach((b, i) => b.classList.toggle('sel', i === sel));
++  const pick = (i) => { const c = items[i]; close(); c?.run(); };
++
++  input.addEventListener('input', () => { sel = 0; render(input.value.trim().toLowerCase()); });
++  input.addEventListener('keydown', (e) => {
++    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(items.length - 1, sel + 1); mark(); }
++    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(0, sel - 1); mark(); }
++    else if (e.key === 'Enter') { e.preventDefault(); pick(sel); }
++    else if (e.key === 'Escape') close();
++  });
++  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
++
++  render('');
++  input.focus();
++}
++
++function close() {
++  overlay?.remove();
++  overlay = null;
++}
+diff --git a/js/pdfmake.js b/js/pdfmake.js
+new file mode 100644
+index 0000000..8df734b
+--- /dev/null
+@@ -0,0 +1,90 @@
++/* Ayomide Studio — images → PDF (minimal PDF 1.4 writer, JPEG embedding, zero deps) */
++
++/* Pure core: pages = [{bytes: Uint8Array (JPEG), w, h}] */
++export function jpegPagesToPdf(pages) {
++  const enc = new TextEncoder();
++  const objects = []; // 1-based ids; entries: {text} | {dict, stream}
++
++  const push = (entry) => { objects.push(entry); return objects.length; };
++
++  const catalogId = 1;
++  const pagesId = 2;
++  push(null); // catalog placeholder (id 1)
++  push(null); // pages placeholder (id 2)
++
++  const kidIds = [];
++  for (const p of pages) {
++    const xobjId = push({
++      dict: `<< /Type /XObject /Subtype /Image /Width ${p.w} /Height ${p.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${p.bytes.length} >>`,
++      stream: p.bytes
++    });
++    const content = `q ${p.w} 0 0 ${p.h} 0 0 cm /Im${xobjId} Do Q`;
++    const contentId = push({
++      text: `<< /Length ${content.length} >>\nstream\n${content}\nendstream`
++    });
++    const pageId = push({
++      text: `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${p.w} ${p.h}] ` +
++        `/Resources << /XObject << /Im${xobjId} ${xobjId} 0 R >> >> /Contents ${contentId} 0 R >>`
++    });
++    kidIds.push(pageId);
++  }
++
++  objects[catalogId - 1] = { text: `<< /Type /Catalog /Pages ${pagesId} 0 R >>` };
++  objects[pagesId - 1] = { text: `<< /Type /Pages /Kids [${kidIds.map((id) => id + ' 0 R').join(' ')}] /Count ${kidIds.length} >>` };
++
++  const parts = [];
++  const offsets = [];
++  const header = enc.encode('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
++  parts.push(header);
++  let pos = header.length;
++
++  objects.forEach((entry, idx) => {
++    const id = idx + 1;
++    offsets[id] = pos;
++    const head = enc.encode(`${id} 0 obj\n`);
++    parts.push(head);
++    pos += head.length;
++    if (entry.stream) {
++      const d = enc.encode(entry.dict + '\nstream\n');
++      const tail = enc.encode('\nendstream\nendobj\n');
++      parts.push(d, entry.stream, tail);
++      pos += d.length + entry.stream.length + tail.length;
++    } else {
++      const b = enc.encode(entry.text + '\nendobj\n');
++      parts.push(b);
++      pos += b.length;
++    }
++  });
++
++  const xrefStart = pos;
++  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
++  for (let i = 1; i <= objects.length; i++) {
++    xref += String(offsets[i]).padStart(10, '0') + ' 00000 n \n';
++  }
++  parts.push(enc.encode(xref));
++  const trailer = `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
++  parts.push(enc.encode(trailer));
++
++  return new Blob(parts, { type: 'application/pdf' });
++}
++
++/* Browser wrapper: drawables (Image/canvas) → compressed pages → PDF */
++export async function imagesToPdf(images) {
++  const pages = [];
++  for (const img of images) {
++    const w = img.naturalWidth || img.width;
++    const h = img.naturalHeight || img.height;
++    const scale = Math.min(1, 1600 / Math.max(w, h));
++    const cw = Math.max(1, Math.round(w * scale));
++    const ch = Math.max(1, Math.round(h * scale));
++    const c = document.createElement('canvas');
++    c.width = cw; c.height = ch;
++    const ctx = c.getContext('2d');
++    ctx.fillStyle = '#fff';
++    ctx.fillRect(0, 0, cw, ch);
++    ctx.drawImage(img, 0, 0, cw, ch);
++    const jpegBlob = await new Promise((res) => c.toBlob(res, 'image/jpeg', 0.88));
++    pages.push({ bytes: new Uint8Array(await jpegBlob.arrayBuffer()), w: cw, h: ch });
++  }
++  return jpegPagesToPdf(pages);
++}
+diff --git a/js/qr.js b/js/qr.js
+new file mode 100644
+index 0000000..845cf98
+--- /dev/null
+@@ -0,0 +1,335 @@
++/* Ayomide Studio — QR code generator (byte mode, versions 1–10, ECC level M) + scanner */
++/* Generator written from the QR specification (ISO/IEC 18004). */
++
++/* ---- GF(256) arithmetic ---- */
++const EXP = new Uint8Array(512);
++const LOG = new Uint8Array(256);
++(() => {
++  let x = 1;
++  for (let i = 0; i < 255; i++) {
++    EXP[i] = x;
++    LOG[x] = i;
++    x <<= 1;
++    if (x & 0x100) x ^= 0x11D;
++  }
++  for (let i = 255; i < 512; i++) EXP[i] = EXP[i - 255];
++})();
++const gmul = (a, b) => (a === 0 || b === 0) ? 0 : EXP[LOG[a] + LOG[b]];
++
++function rsGenPoly(degree) {
++  let poly = [1];
++  for (let i = 0; i < degree; i++) {
++    const next = new Array(poly.length + 1).fill(0);
++    for (let j = 0; j < poly.length; j++) {
++      next[j] ^= gmul(poly[j], EXP[i]);
++      next[j + 1] ^= poly[j];
++    }
++    poly = next;
++  }
++  return poly.reverse(); // highest-degree last? we keep ascending below instead
++}
++
++function rsEncode(data, ecLen) {
++  // generator polynomial coefficients (ascending), reversed for synthetic division
++  const gen = [1];
++  for (let i = 0; i < ecLen; i++) {
++    const next = new Array(gen.length + 1).fill(0);
++    for (let j = 0; j < gen.length; j++) {
++      next[j + 1] ^= gen[j];
++      next[j] ^= gmul(gen[j], EXP[i]);
++    }
++    gen.splice(0, gen.length, ...next);
++  }
++  gen.reverse();
++  const rem = new Array(ecLen).fill(0);
++  for (const b of data) {
++    const factor = b ^ rem[0];
++    rem.shift();
++    rem.push(0);
++    if (factor !== 0) for (let i = 0; i < ecLen; i++) rem[i] ^= gmul(gen[i + 1], factor);
++  }
++  return rem;
++}
++
++/* ---- version tables (ECC level M) ----
++   [totalCodewords, [[blockTotal, blockData], ...]] */
++const VERSIONS = {
++  1: [26, [[26, 16]]],
++  2: [44, [[44, 28]]],
++  3: [70, [[70, 44]]],
++  4: [100, [[50, 32], [50, 32]]],
++  5: [134, [[67, 43], [67, 43]]],
++  6: [[172].slice(0) && 172, [[43, 27], [43, 27], [43, 27], [43, 27]]],
++  7: [196, [[49, 31], [49, 31], [49, 31], [49, 31]]],
++  8: [242, [[60, 38], [60, 38], [61, 39], [61, 39]]],
++  9: [292, [[58, 36], [58, 36], [58, 36], [59, 37], [59, 37]]],
++  10: [346, [[69, 43], [69, 43], [69, 43], [69, 43], [70, 44]]]
++};
++const ALIGN = { 1: [6], 2: [6, 18], 3: [6, 22], 4: [6, 26], 5: [6, 30], 6: [6, 34], 7: [6, 22, 38], 8: [6, 24, 42], 9: [6, 26, 46], 10: [6, 28, 50] };
++
++function pickVersion(byteLen) {
++  for (let v = 1; v <= 10; v++) {
++    const [, blocks] = VERSIONS[v];
++    const dataCodewords = blocks.reduce((n, [tot, dat]) => n + dat, 0);
++    // mode(4) + count(8 for v<10, 16 for v10) + terminator
++    const countBits = v < 10 ? 8 : 16;
++    const capacityBits = dataCodewords * 8;
++    const need = 4 + countBits + byteLen * 8;
++    if (need + 4 <= capacityBits || (need <= capacityBits && byteLen * 8 + 4 + countBits <= capacityBits - 0)) {
++      if (need <= capacityBits) return v;
++    }
++    if (need <= capacityBits) return v;
++  }
++  return null;
++}
++
++function buildCodewords(bytes, version) {
++  const [total, blocks] = VERSIONS[version];
++  const dataCodewords = blocks.reduce((n, [, dat]) => n + dat, 0);
++  const countBits = version < 10 ? 8 : 16;
++  const bits = [];
++  const push = (val, len) => { for (let i = len - 1; i >= 0; i--) bits.push((val >> i) & 1); };
++  push(0b0100, 4);                 // byte mode
++  push(bytes.length, countBits);   // char count
++  for (const b of bytes) push(b, 8);
++  const capacity = dataCodewords * 8;
++  push(0, Math.min(4, capacity - bits.length));      // terminator
++  while (bits.length % 8 !== 0) bits.push(0);         // byte align
++  const data = [];
++  for (let i = 0; i < bits.length; i += 8) {
++    let b = 0;
++    for (let j = 0; j < 8; j++) b = (b << 1) | bits[i + j];
++    data.push(b);
++  }
++  const PAD = [0xEC, 0x11];
++  for (let i = 0; data.length < dataCodewords; i++) data.push(PAD[i % 2]);
++
++  // split into blocks, compute ECC, interleave
++  const dataBlocks = [];
++  const ecBlocks = [];
++  let off = 0;
++  for (const [, dat] of blocks) {
++    dataBlocks.push(data.slice(off, off + dat));
++    off += dat;
++  }
++  for (const db of dataBlocks) ecBlocks.push(rsEncode(db, blocks[0][0] - blocks[0][1]));
++  const out = [];
++  const maxData = Math.max(...dataBlocks.map((b) => b.length));
++  for (let i = 0; i < maxData; i++) dataBlocks.forEach((b) => { if (i < b.length) out.push(b[i]); });
++  const maxEc = Math.max(...ecBlocks.map((b) => b.length));
++  for (let i = 0; i < maxEc; i++) ecBlocks.forEach((b) => { if (i < b.length) out.push(b[i]); });
++  return { codewords: out, total };
++}
++
++/* ---- matrix drawing ---- */
++function makeMatrix(version, codewords, maskId) {
++  const size = version * 4 + 17;
++  const modules = [];
++  const isFn = [];
++  for (let y = 0; y < size; y++) { modules.push(new Uint8Array(size)); isFn.push(new Uint8Array(size)); }
++
++  const setFn = (x, y, v) => {
++    if (x >= 0 && y >= 0 && x < size && y < size && !isFn[y][x]) {
++      modules[y][x] = v ? 1 : 0;
++      isFn[y][x] = 1;
++    }
++  };
++
++  // finder patterns + separators
++  const finder = (cx, cy) => {
++    for (let dy = -4; dy <= 4; dy++) {
++      for (let dx = -4; dx <= 4; dx++) {
++        const d = Math.max(Math.abs(dx), Math.abs(dy));
++        setFn(cx + dx, cy + dy, d !== 2 && d !== 4);
++      }
++    }
++  };
++  finder(3, 3); finder(size - 4, 3); finder(3, size - 4);
++
++  // alignment patterns
++  const centers = ALIGN[version];
++  for (const cy of centers) {
++    for (const cx of centers) {
++      if (isFn[cy][cx]) continue;
++      for (let dy = -2; dy <= 2; dy++) {
++        for (let dx = -2; dx <= 2; dx++) {
++          setFn(cx + dx, cy + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
++        }
++      }
++    }
++  }
++
++  // timing patterns
++  for (let i = 0; i < size; i++) {
++    if (!isFn[6][i]) { modules[6][i] = i % 2 === 0 ? 1 : 0; isFn[6][i] = 1; }
++    if (!isFn[i][6]) { modules[i][6] = i % 2 === 0 ? 1 : 0; isFn[i][6] = 1; }
++  }
++
++  // reserve format info areas
++  for (let i = 0; i < 9; i++) {
++    if (i !== 6) { isFn[8][i] = 1; isFn[i][8] = 1; }           // skip timing col/row
++  }
++  for (let i = 0; i < 8; i++) {
++    isFn[8][size - 1 - i] = 1;
++    isFn[size - 1 - i][8] = 1;
++  }
++  modules[size - 8][8] = 1; isFn[size - 8][8] = 1; // dark module
++
++  // version info (v >= 7)
++  if (version >= 7) {
++    let rem = version;
++    for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >> 11) * 0x1F25);
++    const bitsV = ((version << 12) | rem) & 0x1FFFFF;
++    for (let i = 0; i < 18; i++) {
++      const b = (bitsV >> i) & 1;
++      const a = size - 11 + (i % 3), bcol = Math.floor(i / 3);
++      modules[bcol][a] = b; isFn[bcol][a] = 1;   // near top-right
++      modules[a][bcol] = b; isFn[a][bcol] = 1;   // near bottom-left
++    }
++  }
++
++  // place data with zigzag
++  let bitIdx = 0;
++  const totalBits = codewords.length * 8;
++  const bitAt = (i) => (i < totalBits ? (codewords[i >> 3] >> (7 - (i & 7))) & 1 : 0);
++  let upward = true;
++  for (let right = size - 1; right >= 1; right -= 2) {
++    if (right === 6) right = 5; // skip the timing column
++    for (let vert = 0; vert < size; vert++) {
++      const y = upward ? size - 1 - vert : vert;
++      for (const x of [right, right - 1]) {
++        if (isFn[y][x]) continue;
++        modules[y][x] = bitAt(bitIdx);
++        bitIdx++;
++      }
++    }
++    upward = !upward;
++  }
++
++  // masking
++  const mask = (x, y) => {
++    switch (maskId) {
++      case 0: return (x + y) % 2 === 0;
++      case 1: return y % 2 === 0;
++      case 2: return x % 3 === 0;
++      case 3: return (x + y) % 3 === 0;
++      case 4: return (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0;
++      case 5: return x * y % 2 + x * y % 3 === 0;
++      case 6: return (x * y % 2 + x * y % 3) % 2 === 0;
++      default: return ((x + y) % 2 + x * y % 3) % 2 === 0;
++    }
++  };
++  for (let y = 0; y < size; y++) {
++    for (let x = 0; x < size; x++) {
++      if (!isFn[y][x] && mask(x, y)) modules[y][x] ^= 1;
++    }
++  }
++
++  // format info (ECC level M = 0b00)
++  const fmtData = (0b00 << 3) | maskId;
++  let fmt = fmtData << 10;
++  for (let i = 4; i >= 0; i--) if ((fmt >> (i + 10)) & 1) fmt ^= 0x537 << i;
++  const fmtBits = ((fmtData << 10) | fmt) ^ 0x5412;
++
++  for (let i = 0; i <= 5; i++) modules[i][8] = (fmtBits >> i) & 1;
++  modules[7][8] = (fmtBits >> 6) & 1;
++  modules[8][8] = (fmtBits >> 7) & 1;
++  modules[8][7] = (fmtBits >> 8) & 1;
++  for (let i = 9; i < 15; i++) modules[8][14 - i] = (fmtBits >> i) & 1;
++  for (let i = 0; i < 8; i++) modules[8][size - 1 - i] = (fmtBits >> i) & 1;
++  for (let i = 8; i < 15; i++) modules[size - 15 + i][8] = (fmtBits >> i) & 1;
++  modules[size - 8][8] = 1; // dark module stays set
++
++  return { size, modules };
++}
++
++function penalty(modules, size) {
++  let score = 0;
++  // rule 1: runs of same colour
++  for (let y = 0; y < size; y++) {
++    let run = 1;
++    for (let x = 1; x < size; x++) {
++      if (modules[y][x] === modules[y][x - 1]) { run++; if (run === 5) score += 3; else if (run > 5) score++; }
++      else run = 1;
++    }
++  }
++  for (let x = 0; x < size; x++) {
++    let run = 1;
++    for (let y = 1; y < size; y++) {
++      if (modules[y][x] === modules[y - 1][x]) { run++; if (run === 5) score += 3; else if (run > 5) score++; }
++      else run = 1;
++    }
++  }
++  // rule 4: dark ratio
++  let dark = 0;
++  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) dark += modules[y][x];
++  const pct = (dark * 100) / (size * size);
++  score += Math.floor(Math.abs(pct - 50) / 5) * 10;
++  return score;
++}
++
++export { buildCodewords, pickVersion };
++
++export function qrMatrix(text, forceMask = null) {
++  const bytes = new TextEncoder().encode(String(text));
++  if (bytes.length === 0) throw new Error('QR text is empty');
++  const version = pickVersion(bytes.length);
++  if (!version) throw new Error('Text too long for QR (max ~200 chars here)');
++  const { codewords } = buildCodewords(bytes, version);
++  let best = null, bestScore = Infinity;
++  for (let m = 0; m < 8; m++) {
++    if (forceMask !== null && m !== forceMask) continue;
++    const mx = makeMatrix(version, codewords, m);
++    const s = penalty(mx.modules, mx.size);
++    if (s < bestScore) { bestScore = s; best = mx; }
++  }
++  return best;
++}
++
++/* Render a QR to a canvas — with colours & optional center logo */
++export function drawQR(canvas, text, { scale = 8, margin = 4, dark = '#0b0d14', light = '#ffffff', logo = null } = {}) {
++  const { size, modules } = qrMatrix(text);
++  const dim = (size + margin * 2) * scale;
++  canvas.width = dim;
++  canvas.height = dim;
++  const ctx = canvas.getContext('2d');
++  ctx.fillStyle = light;
++  ctx.fillRect(0, 0, dim, dim);
++  ctx.fillStyle = dark;
++  for (let y = 0; y < size; y++) {
++    for (let x = 0; x < size; x++) {
++      if (modules[y][x]) ctx.fillRect((x + margin) * scale, (y + margin) * scale, scale, scale);
++    }
++  }
++  if (logo) {
++    const lw = dim * 0.2;
++    ctx.fillStyle = light;
++    ctx.fillRect(dim / 2 - lw / 2, dim / 2 - lw / 2, lw, lw);
++    try {
++      ctx.drawImage(logo, dim / 2 - lw / 2 + 4, dim / 2 - lw / 2 + 4, lw - 8, lw - 8);
++    } catch { /* bad logo */ }
++  }
++  return dim;
++}
++
++/* Scan a QR from an image blob (uses BarcodeDetector where available) */
++export async function scanQR(blob) {
++  if (!('BarcodeDetector' in window)) {
++    throw new Error('QR scanning is not supported in this browser (try Chrome on Android)');
++  }
++  const url = URL.createObjectURL(blob);
++  try {
++    const img = await new Promise((res, rej) => {
++      const i = new Image();
++      i.onload = () => res(i);
++      i.onerror = rej;
++      i.src = url;
++    });
++    const det = new window.BarcodeDetector({ formats: ['qr_code'] });
++    const codes = await det.detect(img);
++    if (!codes.length) throw new Error('No QR code found in that image');
++    return codes[0].rawValue;
++  } finally {
++    URL.revokeObjectURL(url);
++  }
++}
+diff --git a/js/sync.js b/js/sync.js
+index 1cedd94..d828f08 100644
+--- a/js/sync.js
+@@ -1,10 +1,11 @@
+ /* Ayomide Studio — cloud sync client (works with server/index.js — your own deployment) */
+-import { $, toast, emit, on, fmtBytes } from './utils.js';
++import { $, toast, emit, on, fmtBytes, randomHex, deriveKey, encryptBlob, decryptBlob } from './utils.js';
+ import { kvGet, kvSet, allFiles, putFileRec, allChat, putChatRow } from './db.js';
+ 
+ let cfg = null;
+ let syncing = false;
+ let autoTimer = null;
++let e2eeKey = null; // CryptoKey when E2EE is active this session
+ const MAX_SYNC_FILE = 100 * 1024 * 1024; // 100MB
+ 
+ async function api(path, opts = {}, { raw = false } = {}) {
+@@ -93,9 +94,49 @@ function updateState() {
+     : 'Not connected.';
+ }
+ 
++/* ---- E2EE (server only ever stores ciphertext) ---- */
++export async function setE2EE(on, passphrase, remember) {
++  cfg = cfg || await kvGet('sync', {}) || {};
++  if (!on) {
++    delete cfg.enc;
++    e2eeKey = null;
++    await kvSet('sync', cfg);
++    toast('End-to-end encryption disabled for sync', 'info');
++    return;
++  }
++  if (!passphrase || passphrase.length < 6) { toast('Sync passphrase must be at least 6 characters.', 'warn'); return; }
++  const enc = { salt: cfg.enc?.salt || randomHex(16) };
++  const key = await deriveKey(passphrase, enc.salt);
++  if (remember) {
++    enc.jwk = await crypto.subtle.exportKey('jwk', key); // convenience — protected by device access
++  }
++  cfg.enc = enc;
++  e2eeKey = key;
++  await kvSet('sync', cfg);
++  toast('End-to-end encryption enabled 🔐 — the server will only ever store ciphertext.', 'ok', 5000);
++}
++
++async function ensureE2EEKey() {
++  if (!cfg?.enc) return null;
++  if (e2eeKey) return e2eeKey;
++  if (cfg.enc.jwk) {
++    try {
++      e2eeKey = await crypto.subtle.importKey('jwk', cfg.enc.jwk, 'AES-GCM', false, ['encrypt', 'decrypt']);
++      return e2eeKey;
++    } catch { return null; }
++  }
++  return null; // passphrase must be re-entered in Settings
++}
++
+ export async function syncNow(silent = true) {
+   if (!cfg?.token || syncing) return;
+   if (!navigator.onLine) return;
++  const eKey = cfg.enc ? await ensureE2EEKey() : null;
++  if (cfg.enc && !eKey) {
++    toast('Re-enter your sync passphrase: Settings → Cloud sync → passphrase field.', 'warn', 6000);
++    $('#sync-status').textContent = 'E2EE passphrase needed — enter it in Settings.';
++    return;
++  }
+   syncing = true;
+   let pushed = 0, pulled = 0, chats = 0, skipped = 0;
+   try {
+@@ -120,9 +161,16 @@ export async function syncNow(silent = true) {
+         vault: lf.vault ? '1' : '0',
+         iv: lf.iv || ''
+       });
++      let body = lf.blob;
++      if (eKey && !lf.vault) {
++        const { blob: encBlob, ivHex } = await encryptBlob(lf.blob, eKey);
++        body = encBlob;
++        q.set('enc', '1');
++        q.set('encIv', ivHex);
++      }
+       await api('/api/files/' + encodeURIComponent(lf.id) + '?' + q.toString(), {
+         method: 'PUT',
+-        body: lf.blob
++        body
+       }, { raw: true });
+       pushed++;
+     }
+@@ -131,8 +179,13 @@ export async function syncNow(silent = true) {
+     for (const rf of remoteRes.files || []) {
+       const lf = localFiles.find((f) => f.id === rf.id);
+       if (lf && (lf.updated || lf.addedAt || 0) >= (rf.updated || 0)) continue;
++      if (rf.enc && !eKey) { skipped++; continue; } // encrypted remotely, no key locally
+       const res = await api('/api/files/' + encodeURIComponent(rf.id) + '/blob');
+-      const blob = await res.blob();
++      let blob = await res.blob();
++      if (rf.enc) {
++        try { blob = await decryptBlob(blob, eKey, rf.encIv || ''); }
++        catch { skipped++; continue; }
++      }
+       await putFileRec({
+         id: rf.id,
+         name: rf.name,
+diff --git a/js/tools.js b/js/tools.js
+new file mode 100644
+index 0000000..b9021ef
+--- /dev/null
+@@ -0,0 +1,902 @@
++/* Ayomide Studio — Tools hub: AI image, GIF, collage, batch, PDF, EXIF, QR, trimmer, insights */
++import { $, $$, toast, download, emit, loadImage, fmtBytes, fmtDate, esc, isImage, isVideo } from './utils.js';
++import { allFiles, addFile, getFile } from './db.js';
++import { pickImages, pickAudio, refresh as refreshFiles } from './files.js';
++import { generateImage, STYLES, ocrImage, summarizeText } from './aiimage.js';
++import { canvasFramesToGif } from './gif.js';
++import { imagesToPdf } from './pdfmake.js';
++import { parseExif, stripExif } from './exif.js';
++import { drawQR, scanQR } from './qr.js';
++import { batchProcess } from './batch.js';
++import { makeZip } from './exporter.js';
++
++const REGISTRY = [];
++const tool = (def) => REGISTRY.push(def);
++
++/* ================= AI IMAGE ================= */
++tool({
++  id: 'ai-image', name: 'AI Image Generator', icon: '🖌️',
++  desc: 'Describe it — get a real image. Free endpoint or your own API.',
++  async render(el) {
++    el.innerHTML = `
++      <p class="muted">Works without any API key (free public endpoint), or through your connected provider.</p>
++      <textarea id="aiimg-prompt" rows="3" placeholder="e.g. a vibrant Lagos market at sunset, anime style"></textarea>
++      <div class="chip-row" id="aiimg-styles"></div>
++      <div class="row" style="margin-top:10px">
++        <label class="inline">Size
++          <select id="aiimg-size">
++            <option value="1024x1024" selected>Square 1024</option>
++            <option value="1280x720">Landscape 1280×720</option>
++            <option value="720x1280">Vertical 720×1280</option>
++          </select>
++        </label>
++        <button id="aiimg-go" class="btn primary">✨ Generate</button>
++      </div>
++      <div id="aiimg-result" style="margin-top:14px"></div>`;
++    let style = '';
++    const chips = el.querySelector('#aiimg-styles');
++    STYLES.forEach((s) => {
++      const b = document.createElement('button');
++      b.type = 'button';
++      b.className = 'chip' + (s.id === '' ? ' active' : '');
++      b.textContent = s.label;
++      b.addEventListener('click', () => {
++        style = s.id;
++        [...chips.children].forEach((c) => c.classList.remove('active'));
++        b.classList.add('active');
++      });
++      chips.appendChild(b);
++    });
++    el.querySelector('#aiimg-go').addEventListener('click', async () => {
++      const prompt = el.querySelector('#aiimg-prompt').value.trim();
++      if (!prompt) { toast('Describe the image first ✍️', 'warn'); return; }
++      const btn = el.querySelector('#aiimg-go');
++      btn.disabled = true;
++      btn.textContent = '✨ Generating… (up to ~30s)';
++      const [w, h] = el.querySelector('#aiimg-size').value.split('x').map(Number);
++      try {
++        const blob = await generateImage(prompt + (style ? ', ' + style : ''), { width: w, height: h });
++        const url = URL.createObjectURL(blob);
++        const name = 'ai-' + Date.now().toString(36) + '.png';
++        el.querySelector('#aiimg-result').innerHTML = `
++          <img src="${url}" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">
++          <div class="btn-row">
++            <button class="btn primary" id="aiimg-save">💾 Save to Files</button>
++            <button class="btn" id="aiimg-edit">🎨 Edit it</button>
++            <button class="btn ghost" id="aiimg-dl">⬇️ Download</button>
++            <button class="btn ghost" id="aiimg-vid">🎬 Make video</button>
++          </div>`;
++        const saveRec = async () => { const rec = await addFile(blob, name); await refreshFiles(); return rec; };
++        el.querySelector('#aiimg-save').addEventListener('click', async () => { await saveRec(); toast('Saved to Files 💾', 'ok'); });
++        el.querySelector('#aiimg-edit').addEventListener('click', async () => {
++          const rec = await saveRec();
++          emit('open-editor-with', { id: rec.id });
++        });
++        el.querySelector('#aiimg-vid').addEventListener('click', async () => {
++          const rec = await saveRec();
++          emit('open-video-with', { ids: [rec.id] });
++        });
++        el.querySelector('#aiimg-dl').addEventListener('click', () => download(blob, name));
++        toast('Image generated ✨', 'ok');
++      } catch (err) {
++        toast('Generation failed: ' + err.message, 'error', 6000);
++      } finally {
++        btn.disabled = false;
++        btn.textContent = '✨ Generate';
++      }
++    });
++  }
++});
++
++/* ================= GIF ================= */
++tool({
++  id: 'gif', name: 'GIF Maker', icon: '🎞️',
++  desc: 'Images or video clips → animated GIF',
++  async render(el) {
++    el.innerHTML = `
++      <div class="btn-row">
++        <button id="gif-imgs" class="btn primary">📁 Images from Files</button>
++        <button id="gif-up" class="btn ghost">⬆️ Upload images</button>
++        <button id="gif-vid" class="btn">🎬 From a video</button>
++        <input type="file" id="gif-up-input" accept="image/*" multiple hidden>
++        <input type="file" id="gif-vid-input" accept="video/*" hidden>
++      </div>
++      <div class="row" style="margin-top:8px">
++        <label class="inline">Speed <select id="gif-fps"><option>5</option><option selected>10</option><option>15</option></select> fps</label>
++        <label class="inline">Width <select id="gif-w"><option>240</option><option selected>320</option><option>480</option><option>640</option></select> px</label>
++        <button id="gif-go" class="btn primary">🎞️ Make GIF</button>
++      </div>
++      <p class="muted" id="gif-status">No frames yet.</p>
++      <div id="gif-result"></div>`;
++    let frames = [];
++    const status = el.querySelector('#gif-status');
++
++    const addImages = async (blobs) => {
++      frames = [];
++      const w = +el.querySelector('#gif-w').value;
++      for (const b of blobs.slice(0, 40)) {
++        const url = URL.createObjectURL(b);
++        const img = await loadImage(url);
++        URL.revokeObjectURL(url);
++        const h = Math.round(img.naturalHeight * w / img.naturalWidth);
++        const c = document.createElement('canvas');
++        c.width = w; c.height = h;
++        c.getContext('2d').drawImage(img, 0, 0, w, h);
++        frames.push(c);
++      }
++      status.textContent = `${frames.length} frame(s) loaded.`;
++    };
++
++    el.querySelector('#gif-imgs').addEventListener('click', async () => {
++      const recs = await pickImages({ multiple: true, title: 'Pick GIF frames (in order)' });
++      if (recs.length) await addImages(recs.map((r) => r.blob));
++    });
++    el.querySelector('#gif-up').addEventListener('click', () => el.querySelector('#gif-up-input').click());
++    el.querySelector('#gif-up-input').addEventListener('change', async (e) => { await addImages([...e.target.files]); e.target.value = ''; });
++    el.querySelector('#gif-vid').addEventListener('click', () => el.querySelector('#gif-vid-input').click());
++    el.querySelector('#gif-vid-input').addEventListener('change', async (e) => {
++      const f = e.target.files[0];
++      e.target.value = '';
++      if (!f) return;
++      toast('Sampling video frames…');
++      const w = +el.querySelector('#gif-w').value;
++      frames = await videoToFrames(f, { width: w, maxFrames: 20 });
++      status.textContent = `${frames.length} frame(s) sampled from video.`;
++    });
++
++    el.querySelector('#gif-go').addEventListener('click', async () => {
++      if (!frames.length) { toast('Add some frames first 🖼️', 'warn'); return; }
++      const btn = el.querySelector('#gif-go');
++      btn.disabled = true;
++      btn.textContent = '⏳ Encoding…';
++      try {
++        // normalize frame heights
++        const h = frames[0].height;
++        const norm = frames.map((c) => {
++          if (c.height === h) return c;
++          const c2 = document.createElement('canvas');
++          c2.width = Math.round(c.width * h / c.height);
++          c2.height = h;
++          const ctx = c2.getContext('2d');
++          ctx.imageSmoothingQuality = 'high';
++          ctx.drawImage(c, 0, 0, c2.width, h);
++          return c2;
++        });
++        const blob = await canvasFramesToGif(norm, { fps: +el.querySelector('#gif-fps').value, loop: true });
++        const url = URL.createObjectURL(blob);
++        const name = 'ayomide-' + Date.now().toString(36) + '.gif';
++        el.querySelector('#gif-result').innerHTML = `
++          <img src="${url}" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">
++          <p class="muted">${fmtBytes(blob.size)}</p>
++          <div class="btn-row">
++            <button class="btn primary" id="gif-save">💾 Save to Files</button>
++            <button class="btn ghost" id="gif-dl">⬇️ Download</button>
++          </div>`;
++        el.querySelector('#gif-save').addEventListener('click', async () => { await addFile(blob, name); await refreshFiles(); toast('GIF saved 💾', 'ok'); });
++        el.querySelector('#gif-dl').addEventListener('click', () => download(blob, name));
++        toast('GIF ready 🎞️', 'ok');
++      } catch (err) {
++        toast('GIF failed: ' + err.message, 'error', 6000);
++      } finally {
++        btn.disabled = false;
++        btn.textContent = '🎞️ Make GIF';
++      }
++    });
++  }
++});
++
++async function videoToFrames(file, { width = 320, maxFrames = 20 } = {}) {
++  const url = URL.createObjectURL(file);
++  try {
++    const v = document.createElement('video');
++    v.src = url;
++    v.muted = true;
++    v.playsInline = true;
++    await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('Cannot read video')); });
++    const dur = Math.min(v.duration || 3, 12);
++    const h = Math.round(v.videoHeight * width / v.videoWidth) || 240;
++    const out = [];
++    for (let i = 0; i < maxFrames; i++) {
++      const t = (dur * i) / maxFrames;
++      await new Promise((res) => {
++        const done = () => { v.removeEventListener('seeked', done); res(); };
++        v.addEventListener('seeked', done);
++        v.currentTime = Math.min(t, dur - 0.05);
++      });
++      const c = document.createElement('canvas');
++      c.width = width; c.height = h;
++      c.getContext('2d').drawImage(v, 0, 0, width, h);
++      out.push(c);
++    }
++    return out;
++  } finally {
++    URL.revokeObjectURL(url);
++  }
++}
++
++/* ================= COLLAGE ================= */
++tool({
++  id: 'collage', name: 'Collage Maker', icon: '🖼️',
++  desc: 'Combine 2–6 photos into one layout',
++  async render(el) {
++    el.innerHTML = `
++      <div class="btn-row">
++        <button id="col-pick" class="btn primary">📁 Pick 2–6 images</button>
++        <button id="col-up" class="btn ghost">⬆️ Upload</button>
++        <input type="file" id="col-up-input" accept="image/*" multiple hidden>
++      </div>
++      <div class="row" style="margin-top:8px">
++        <label class="inline">Layout
++          <select id="col-layout">
++            <option value="2col">2 columns</option>
++            <option value="2row">2 rows</option>
++            <option value="3col">3 columns</option>
++            <option value="grid4" selected>Grid 2×2</option>
++            <option value="grid6">Grid 2×3</option>
++            <option value="feature">1 big + 2</option>
++          </select>
++        </label>
++        <label class="inline">Gap <input id="col-gap" type="range" min="0" max="40" value="12"></label>
++        <input type="color" id="col-bg" value="#0b0d14" title="Background">
++        <label class="check"><input id="col-round" type="checkbox" checked> Rounded</label>
++      </div>
++      <button id="col-go" class="btn primary" style="margin-top:8px">🖼️ Create collage</button>
++      <div id="col-result" style="margin-top:12px"></div>`;
++    let imgs = [];
++    const load = async (blobs) => {
++      imgs = [];
++      for (const b of blobs.slice(0, 6)) {
++        const url = URL.createObjectURL(b);
++        imgs.push(await loadImage(url));
++        URL.revokeObjectURL(url);
++      }
++      toast(`${imgs.length} image(s) loaded`, 'ok');
++    };
++    el.querySelector('#col-pick').addEventListener('click', async () => {
++      const recs = await pickImages({ multiple: true, title: 'Pick 2–6 images' });
++      if (recs.length) await load(recs.map((r) => r.blob));
++    });
++    el.querySelector('#col-up').addEventListener('click', () => el.querySelector('#col-up-input').click());
++    el.querySelector('#col-up-input').addEventListener('change', async (e) => { await load([...e.target.files]); e.target.value = ''; });
++
++    const redraw = () => { if (imgs.length >= 2) make(); };
++    ['#col-gap', '#col-bg', '#col-round', '#col-layout'].forEach((s) => el.querySelector(s).addEventListener('input', redraw));
++
++    async function make() {
++      const layout = el.querySelector('#col-layout').value;
++      const gap = +el.querySelector('#col-gap').value;
++      const bg = el.querySelector('#col-bg').value;
++      const round = el.querySelector('#col-round').checked;
++      const W = 1280;
++      const rects = layoutRects(layout, imgs.length, W, gap);
++      const cellH = 720 / (layout === '2row' || layout === 'grid4' || layout === 'grid6' || layout === 'feature' ? 2 : 1);
++      const rows = layout === '3col' || layout === '2col' ? 1 : 2;
++      const H = Math.round(rects[0].h * rows + gap * (rows + 1));
++      const c = document.createElement('canvas');
++      c.width = W; c.height = H;
++      const ctx = c.getContext('2d');
++      ctx.fillStyle = bg;
++      ctx.fillRect(0, 0, W, H);
++      imgs.slice(0, rects.length).forEach((img, i) => {
++        drawCover(ctx, img, rects[i], round ? Math.min(24, rects[i].w / 8) : 0);
++      });
++      const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
++      const name = 'collage-' + Date.now().toString(36) + '.png';
++      const url = URL.createObjectURL(blob);
++      el.querySelector('#col-result').innerHTML = `
++        <img src="${url}" style="max-width:100%;border-radius:12px;border:1px solid var(--border)">
++        <div class="btn-row">
++          <button class="btn primary" id="col-save">💾 Save to Files</button>
++          <button class="btn ghost" id="col-dl">⬇️ Download</button>
++        </div>`;
++      el.querySelector('#col-save').addEventListener('click', async () => { await addFile(blob, name); await refreshFiles(); toast('Collage saved 💾', 'ok'); });
++      el.querySelector('#col-dl').addEventListener('click', () => download(blob, name));
++    }
++
++    el.querySelector('#col-go').addEventListener('click', () => {
++      if (imgs.length < 2) { toast('Pick at least 2 images 🖼️', 'warn'); return; }
++      make();
++    });
++  }
++});
++
++function layoutRects(layout, n, W, gap) {
++  const pad = gap;
++  const inner = W - pad * 3;
++  const half = (inner - gap) / 2;
++  const third = (inner - gap * 2) / 3;
++  const H = 720;
++  const cell = (x, y, w, h) => ({ x, y, w, h });
++  switch (layout) {
++    case '2col': return [cell(pad, pad, half, H - pad * 2), cell(pad * 2 + half, pad, half, H - pad * 2)];
++    case '2row': {
++      const h = (H - pad * 3) / 2;
++      return [cell(pad, pad, inner, h), cell(pad, pad * 2 + h, inner, h)];
++    }
++    case '3col': return [cell(pad, pad, third, H - pad * 2), cell(pad * 2 + third, pad, third, H - pad * 2), cell(pad * 3 + third * 2, pad, third, H - pad * 2)];
++    case 'grid6': {
++      const h = (H - pad * 3) / 2;
++      return [0, 1, 2, 3, 4, 5].map((i) => cell(pad + (i % 3) * (third + gap), pad + Math.floor(i / 3) * (h + gap), third, h));
++    }
++    case 'feature':
++      return [cell(pad, pad, half, H - pad * 2), cell(pad * 2 + half, pad, half, (H - pad * 3) / 2), cell(pad * 2 + half, pad * 2 + (H - pad * 3) / 2, half, (H - pad * 3) / 2)];
++    default: { // grid4
++      const h = (H - pad * 3) / 2;
++      return [0, 1, 2, 3].map((i) => cell(pad + (i % 2) * (half + gap), pad + Math.floor(i / 2) * (h + gap), half, h));
++    }
++  }
++}
++
++function drawCover(ctx, img, r, radius) {
++  const s = Math.max(r.w / img.naturalWidth, r.h / img.naturalHeight);
++  const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
++  const dx = r.x + (r.w - dw) / 2, dy = r.y + (r.h - dh) / 2;
++  ctx.save();
++  ctx.beginPath();
++  if (radius && ctx.roundRect) ctx.roundRect(r.x, r.y, r.w, r.h, radius);
++  else ctx.rect(r.x, r.y, r.w, r.h);
++  ctx.clip();
++  ctx.drawImage(img, dx, dy, dw, dh);
++  ctx.restore();
++}
++
++/* ================= BATCH ================= */
++tool({
++  id: 'batch', name: 'Batch Tools', icon: '⚡',
++  desc: 'Convert / resize / compress / watermark many images at once',
++  async render(el) {
++    el.innerHTML = `
++      <div class="row">
++        <button id="bt-src-all" class="btn primary">All images</button>
++        <button id="bt-src-pick" class="btn">📁 Choose…</button>
++      </div>
++      <div class="row" style="margin-top:10px">
++        <label class="inline">Convert to
++          <select id="bt-format"><option value="">keep format</option><option value="image/webp">WebP</option><option value="image/jpeg">JPEG</option><option value="image/png">PNG</option></select>
++        </label>
++        <label class="inline">Max dim <input id="bt-maxdim" type="number" placeholder="px" style="width:80px"></label>
++        <label class="inline">Target <input id="bt-kb" type="number" placeholder="KB" style="width:80px"> KB</label>
++      </div>
++      <div class="row">
++        <input id="bt-wm" type="text" placeholder="Watermark text (optional)">
++      </div>
++      <button id="bt-go" class="btn primary" style="margin-top:10px">⚡ Process</button>
++      <div class="progress" id="bt-prog-wrap" hidden style="margin-top:10px"><div id="bt-prog"></div></div>
++      <p class="muted" id="bt-status"></p>
++      <div id="bt-result"></div>`;
++    let sources = null; // null = all
++    el.querySelector('#bt-src-all').addEventListener('click', () => { sources = null; el.querySelector('#bt-status').textContent = 'Source: ALL images in Files.'; });
++    el.querySelector('#bt-src-pick').addEventListener('click', async () => {
++      const recs = await pickImages({ multiple: true, title: 'Pick images to batch-process' });
++      if (recs.length) { sources = recs; el.querySelector('#bt-status').textContent = `Source: ${recs.length} picked image(s).`; }
++    });
++
++    el.querySelector('#bt-go').addEventListener('click', async () => {
++      const files = sources ? sources : (await allFiles()).filter((f) => isImage(f.type) && !f.vault);
++      if (!files.length) { toast('No images selected.', 'warn'); return; }
++      const opts = {
++        format: el.querySelector('#bt-format').value || null,
++        maxDim: +el.querySelector('#bt-maxdim').value || null,
++        targetKB: +el.querySelector('#bt-kb').value || null,
++        watermark: el.querySelector('#bt-wm').value.trim() ? { text: el.querySelector('#bt-wm').value.trim(), pos: 'br', opacity: 60, size: 30 } : null
++      };
++      if (!opts.format && !opts.maxDim && !opts.targetKB && !opts.watermark) { toast('Pick at least one operation.', 'warn'); return; }
++      const btn = el.querySelector('#bt-go');
++      btn.disabled = true;
++      el.querySelector('#bt-prog-wrap').hidden = false;
++      const results = [];
++      for (let i = 0; i < files.length; i++) {
++        try {
++          results.push({ name: files[i].name, blob: await batchProcess([files[i].blob], opts).then((r) => r[0].blob) });
++        } catch { }
++        el.querySelector('#bt-prog').style.width = ((i + 1) / files.length * 100) + '%';
++      }
++      btn.disabled = false;
++      const origTotal = files.reduce((n, f) => n + f.size, 0);
++      const newTotal = results.reduce((n, r) => n + r.blob.size, 0);
++      el.querySelector('#bt-status').textContent =
++        `${results.length}/${files.length} processed · ${fmtBytes(origTotal)} → ${fmtBytes(newTotal)}${origTotal > newTotal ? ` (saved ${fmtBytes(origTotal - newTotal)})` : ''}`;
++      el.querySelector('#bt-result').innerHTML = `
++        <div class="btn-row">
++          <button class="btn primary" id="bt-save">💾 Save all to Files</button>
++          <button class="btn ghost" id="bt-zip">📦 Download ZIP</button>
++        </div>`;
++      el.querySelector('#bt-save').addEventListener('click', async () => {
++        for (const r of results) await addFile(r.blob, 'bt-' + r.name);
++        await refreshFiles();
++        toast(`Saved ${results.length} files 💾`, 'ok');
++      });
++      el.querySelector('#bt-zip').addEventListener('click', async () => {
++        const entries = [];
++        for (const r of results) entries.push({ name: r.name, data: new Uint8Array(await r.blob.arrayBuffer()) });
++        download(makeZip(entries), 'ayomide-batch.zip');
++      });
++      toast('Batch done ⚡', 'ok');
++    });
++  }
++});
++
++/* ================= PDF ================= */
++tool({
++  id: 'pdf', name: 'Images → PDF', icon: '📕',
++  desc: 'Turn photos/scans into a single PDF document',
++  async render(el) {
++    el.innerHTML = `
++      <div class="btn-row">
++        <button id="pdf-pick" class="btn primary">📁 Pick images</button>
++        <button id="pdf-up" class="btn ghost">⬆️ Upload</button>
++        <input type="file" id="pdf-up-input" accept="image/*" multiple hidden>
++      </div>
++      <p class="muted" id="pdf-status">No images yet — one page per image, in picking order.</p>
++      <button id="pdf-go" class="btn primary" hidden>📕 Create PDF</button>
++      <div id="pdf-result" style="margin-top:10px"></div>`;
++    let imgs = [];
++    const set = (list) => { imgs = list; el.querySelector('#pdf-go').hidden = !imgs.length; el.querySelector('#pdf-status').textContent = imgs.length ? `${imgs.length} page(s) ready.` : 'No images yet.'; };
++    const load = async (blobs) => {
++      const out = [];
++      for (const b of blobs) {
++        const url = URL.createObjectURL(b);
++        out.push(await loadImage(url));
++        URL.revokeObjectURL(url);
++      }
++      set(out);
++    };
++    el.querySelector('#pdf-pick').addEventListener('click', async () => {
++      const recs = await pickImages({ multiple: true, title: 'Pick images (one page each)' });
++      if (recs.length) await load(recs.map((r) => r.blob));
++    });
++    el.querySelector('#pdf-up').addEventListener('click', () => el.querySelector('#pdf-up-input').click());
++    el.querySelector('#pdf-up-input').addEventListener('change', async (e) => { await load([...e.target.files]); e.target.value = ''; });
++    el.querySelector('#pdf-go').addEventListener('click', async () => {
++      if (!imgs.length) return;
++      const btn = el.querySelector('#pdf-go');
++      btn.disabled = true;
++      try {
++        const blob = await imagesToPdf(imgs);
++        const name = 'ayomide-' + Date.now().toString(36) + '.pdf';
++        el.querySelector('#pdf-result').innerHTML = `
++          <div class="btn-row">
++            <button class="btn primary" id="pdf-save">💾 Save to Files (${fmtBytes(blob.size)})</button>
++            <button class="btn ghost" id="pdf-dl">⬇️ Download</button>
++          </div>`;
++        el.querySelector('#pdf-save').addEventListener('click', async () => { await addFile(blob, name); await refreshFiles(); toast('PDF saved 💾', 'ok'); });
++        el.querySelector('#pdf-dl').addEventListener('click', () => download(blob, name));
++        toast(`PDF ready — ${imgs.length} page(s) 📕`, 'ok');
++      } catch (err) {
++        toast('PDF failed: ' + err.message, 'error');
++      } finally { btn.disabled = false; }
++    });
++  }
++});
++
++/* ================= EXIF ================= */
++tool({
++  id: 'exif', name: 'EXIF Viewer & Stripper', icon: '🕵️',
++  desc: 'See & remove hidden GPS/camera data from photos before sharing',
++  async render(el) {
++    el.innerHTML = `
++      <div class="btn-row">
++        <button id="ex-pick" class="btn primary">📁 Pick a photo</button>
++        <button id="ex-up" class="btn ghost">⬆️ Upload</button>
++        <input type="file" id="ex-up-input" accept="image/jpeg" hidden>
++      </div>
++      <p class="muted">Works on JPEGs (most camera/WhatsApp-save photos). Stripping removes GPS location,
++      camera model, timestamps and more — the image itself is untouched.</p>
++      <div id="ex-result" style="margin-top:10px"></div>`;
++    const analyze = async (blob, name) => {
++      const info = await parseExif(blob);
++      const rows = info.tags.map((t) => `<tr><td>${esc(t.label)}</td><td>${esc(String(t.value))}</td></tr>`).join('');
++      const gpsHtml = info.gps
++        ? `<p>📍 <b>GPS location embedded!</b> <a href="https://www.openstreetmap.org/?mlat=${info.gps.lat.toFixed(5)}&mlon=${info.gps.lon.toFixed(5)}#map=15/${info.gps.lat.toFixed(5)}/${info.gps.lon.toFixed(5)}" target="_blank" rel="noopener">View on map ↗</a></p>`
++        : '';
++      el.querySelector('#ex-result').innerHTML = `
++        <h4>${esc(name)}</h4>
++        ${info.hasExif ? `<table class="exif-table">${rows}</table>${gpsHtml}` : '<p>✅ No EXIF metadata found — this photo is already clean.</p>'}
++        <div class="btn-row">
++          <button class="btn primary" id="ex-strip">🧼 Strip EXIF & save copy</button>
++        </div>`;
++      el.querySelector('#ex-strip').addEventListener('click', async () => {
++        const { blob: clean } = await stripExif(blob);
++        const nm = name.replace(/\.jpe?g$/i, '') + '-clean.jpg';
++        await addFile(clean, nm);
++        await refreshFiles();
++        download(clean, nm);
++        toast('EXIF stripped — clean copy saved & downloaded 🧼', 'ok');
++        analyze(clean, nm);
++      });
++    };
++    el.querySelector('#ex-pick').addEventListener('click', async () => {
++      const recs = await pickImages({ multiple: false, title: 'Pick a JPEG photo' });
++      if (recs[0]) analyze(recs[0].blob, recs[0].name);
++    });
++    el.querySelector('#ex-up').addEventListener('click', () => el.querySelector('#ex-up-input').click());
++    el.querySelector('#ex-up-input').addEventListener('change', async (e) => {
++      const f = e.target.files[0];
++      e.target.value = '';
++      if (f) analyze(f, f.name);
++    });
++  }
++});
++
++/* ================= QR ================= */
++tool({
++  id: 'qr', name: 'QR Studio', icon: '📱',
++  desc: 'Generate styled QR codes & scan QR from images',
++  async render(el) {
++    el.innerHTML = `
++      <div class="chip-row">
++        <button class="chip active" data-qt="gen">✏️ Generate</button>
++        <button class="chip" data-qt="scan">📷 Scan</button>
++      </div>
++      <div id="qr-gen">
++        <textarea id="qr-text" rows="2" placeholder="Text or URL for the QR code">https://ogbas4991.github.io/Ayomide/</textarea>
++        <div class="row" style="margin-top:8px">
++          <label class="inline">Dark <input type="color" id="qr-dark" value="#0b0d14"></label>
++          <label class="inline">Light <input type="color" id="qr-light" value="#ffffff"></label>
++          <label class="inline">Logo <input type="file" id="qr-logo" accept="image/*"></label>
++        </div>
++        <button id="qr-go" class="btn primary" style="margin-top:8px">📱 Generate QR</button>
++      </div>
++      <div id="qr-scan" hidden>
++        <div class="btn-row">
++          <button id="qr-scan-pick" class="btn primary">📁 Pick image with QR</button>
++          <button id="qr-scan-up" class="btn ghost">⬆️ Upload</button>
++          <input type="file" id="qr-scan-input" accept="image/*" hidden>
++        </div>
++        <p class="muted">Scanning works on Android Chrome/Edge (camera apps can scan your generated codes too).</p>
++      </div>
++      <div id="qr-result" style="margin-top:12px"></div>`;
++    let mode = 'gen';
++    let logo = null;
++    [...el.querySelectorAll('[data-qt]')].forEach((b) => b.addEventListener('click', () => {
++      mode = b.dataset.qt;
++      [...el.querySelectorAll('[data-qt]')].forEach((x) => x.classList.toggle('active', x === b));
++      el.querySelector('#qr-gen').hidden = mode !== 'gen';
++      el.querySelector('#qr-scan').hidden = mode !== 'scan';
++    }));
++    el.querySelector('#qr-logo').addEventListener('change', async (e) => {
++      const f = e.target.files[0];
++      e.target.value = '';
++      if (!f) return;
++      const url = URL.createObjectURL(f);
++      logo = await loadImage(url);
++      URL.revokeObjectURL(url);
++      toast('Logo added — it goes in the QR center 👍', 'ok');
++    });
++    el.querySelector('#qr-go').addEventListener('click', () => {
++      const text = el.querySelector('#qr-text').value.trim();
++      if (!text) { toast('Enter text or a URL first.', 'warn'); return; }
++      try {
++        const c = document.createElement('canvas');
++        drawQR(c, text, {
++          dark: el.querySelector('#qr-dark').value,
++          light: el.querySelector('#qr-light').value,
++          logo
++        });
++        const name = 'qr-' + Date.now().toString(36) + '.png';
++        c.toBlob(async (blob) => {
++          const url = URL.createObjectURL(blob);
++          el.querySelector('#qr-result').innerHTML = '';
++          el.querySelector('#qr-result').append(c, Object.assign(document.createElement('div'), {
++            innerHTML: `<div class="btn-row">
++              <button class="btn primary" id="qr-save">💾 Save to Files</button>
++              <button class="btn ghost" id="qr-dl">⬇️ Download PNG</button>
++            </div>`
++          }));
++          c.style.maxWidth = '100%';
++          c.style.borderRadius = '12px';
++          c.style.border = '1px solid var(--border)';
++          el.querySelector('#qr-save').addEventListener('click', async () => { await addFile(blob, name); await refreshFiles(); toast('QR saved 💾', 'ok'); });
++          el.querySelector('#qr-dl').addEventListener('click', () => download(blob, name));
++        }, 'image/png');
++      } catch (err) {
++        toast(err.message, 'error');
++      }
++    });
++    const scanIt = async (blob) => {
++      try {
++        const text = await scanQR(blob);
++        el.querySelector('#qr-result').innerHTML = `
++          <p style="word-break:break-all"><b>Scanned:</b></p>
++          <textarea rows="3">${esc(text)}</textarea>`;
++        toast('QR decoded ✅', 'ok');
++      } catch (err) {
++        toast(err.message, 'error');
++      }
++    };
++    el.querySelector('#qr-scan-pick').addEventListener('click', async () => {
++      const recs = await pickImages({ multiple: false, title: 'Pick an image with a QR code' });
++      if (recs[0]) scanIt(recs[0].blob);
++    });
++    el.querySelector('#qr-scan-up').addEventListener('click', () => el.querySelector('#qr-scan-input').click());
++    el.querySelector('#qr-scan-input').addEventListener('change', (e) => {
++      const f = e.target.files[0];
++      e.target.value = '';
++      if (f) scanIt(f);
++    });
++  }
++});
++
++/* ================= OCR ================= */
++tool({
++  id: 'ocr', name: 'OCR — Text from Images', icon: '🔤',
++  desc: 'Extract text from photos & scanned documents',
++  async render(el) {
++    el.innerHTML = `
++      <div class="btn-row">
++        <button id="ocr-pick" class="btn primary">📁 Pick an image</button>
++        <button id="ocr-up" class="btn ghost">⬆️ Upload</button>
++        <input type="file" id="ocr-up-input" accept="image/*" hidden>
++      </div>
++      <p class="muted">Uses your connected AI provider (Settings → AI chat provider) for accurate recognition.
++      Without one, it tries the browser's built-in detector (rarely available).</p>
++      <div id="ocr-result" style="margin-top:10px"></div>`;
++    const run = async (blob, name) => {
++      const out = el.querySelector('#ocr-result');
++      out.innerHTML = '<p class="muted">⏳ Reading the image…</p>';
++      try {
++        const text = await ocrImage(blob);
++        out.innerHTML = `
++          <h4>${esc(name)}</h4>
++          <textarea rows="10" id="ocr-text"></textarea>
++          <div class="btn-row">
++            <button class="btn primary" id="ocr-copy">📋 Copy text</button>
++            <button class="btn" id="ocr-save">📄 Save as .txt to Files</button>
++          </div>`;
++        out.querySelector('#ocr-text').value = text || '(no text found)';
++        out.querySelector('#ocr-copy').addEventListener('click', async (e) => {
++          try { await navigator.clipboard.writeText(text || ''); toast('Copied 📋', 'ok'); }
++          catch { toast('Select the text and copy manually.', 'warn'); }
++        });
++        out.querySelector('#ocr-save').addEventListener('click', async () => {
++          const txt = out.querySelector('#ocr-text').value;
++          const b = new Blob([txt], { type: 'text/plain' });
++          await addFile(b, (name || 'image').replace(/\.[^.]+$/, '') + '-text.txt');
++          await refreshFiles();
++          toast('Saved as text file 📄', 'ok');
++        });
++        if (text) toast('Text extracted ✅', 'ok');
++        else toast('No readable text found in that image.', 'warn');
++      } catch (err) {
++        out.innerHTML = '';
++        toast(err.message, 'error', 6000);
++      }
++    };
++    el.querySelector('#ocr-pick').addEventListener('click', async () => {
++      const recs = await pickImages({ multiple: false, title: 'Pick an image with text' });
++      if (recs[0]) run(recs[0].blob, recs[0].name);
++    });
++    el.querySelector('#ocr-up').addEventListener('click', () => el.querySelector('#ocr-up-input').click());
++    el.querySelector('#ocr-up-input').addEventListener('change', (e) => {
++      const f = e.target.files[0];
++      e.target.value = '';
++      if (f) run(f, f.name);
++    });
++  }
++});
++
++/* ================= VIDEO TRIMMER ================= */
++tool({
++  id: 'trim', name: 'Video Trimmer', icon: '✂️',
++  desc: 'Cut a section of a stored video, change speed, export',
++  async render(el) {
++    el.innerHTML = `
++      <div class="btn-row"><button id="tr-pick" class="btn primary">📁 Pick a video</button></div>
++      <div id="tr-body" hidden>
++        <video id="tr-video" controls playsinline style="width:100%;border-radius:12px;background:#000"></video>
++        <div class="row" style="margin-top:10px">
++          <label class="inline">Start <input id="tr-start" type="number" min="0" step="0.5" value="0" style="width:76px">s</label>
++          <label class="inline">End <input id="tr-end" type="number" min="0" step="0.5" value="5" style="width:76px">s</label>
++          <label class="inline">Speed
++            <select id="tr-speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select>
++          </label>
++          <label class="check"><input id="tr-mute" type="checkbox"> Mute</label>
++        </div>
++        <button id="tr-go" class="btn primary" style="margin-top:8px">✂️ Trim & export</button>
++      </div>
++      <div id="tr-result" style="margin-top:10px"></div>`;
++    let src = null;
++    el.querySelector('#tr-pick').addEventListener('click', async () => {
++      const vids = (await allFiles()).filter((f) => isVideo(f.type) && !f.vault);
++      if (!vids.length) { toast('No videos in Files — upload one first.', 'warn'); return; }
++      const { modal: m } = await import('./utils.js');
++      const list = document.createElement('div');
++      list.className = 'btn-row wrap';
++      const mm = modal({ title: 'Choose a video', body: list });
++      vids.forEach((rec) => {
++        const b = document.createElement('button');
++        b.className = 'btn';
++        b.textContent = `🎬 ${rec.name} (${fmtBytes(rec.size)})`;
++        b.addEventListener('click', async () => {
++          mm.close();
++          src = rec;
++          const v = el.querySelector('#tr-video');
++          v.src = URL.createObjectURL(rec.blob);
++          await new Promise((r) => { v.onloadedmetadata = r; });
++          el.querySelector('#tr-end').value = Math.min(5, Math.floor(v.duration));
++          el.querySelector('#tr-end').max = v.duration;
++          el.querySelector('#tr-start').max = v.duration;
++          el.querySelector('#tr-body').hidden = false;
++        });
++        list.appendChild(b);
++      });
++    });
++    el.querySelector('#tr-go').addEventListener('click', async () => {
++      if (!src) return;
++      const v = el.querySelector('#tr-video');
++      const start = Math.max(0, +el.querySelector('#tr-start').value || 0);
++      const end = Math.min(v.duration || 1e9, +el.querySelector('#tr-end').value || 5);
++      if (end - start < 0.3) { toast('End must be after start (min 0.3s).', 'warn'); return; }
++      const speed = +el.querySelector('#tr-speed').value;
++      const mute = el.querySelector('#tr-mute').checked;
++      const btn = el.querySelector('#tr-go');
++      btn.disabled = true;
++      btn.textContent = '⏳ Re-encoding in real time…';
++      try {
++        const blob = await trimVideo(src.blob, { start, end, speed, mute });
++        const name = 'trim-' + Date.now().toString(36) + (blob.type.includes('mp4') ? '.mp4' : '.webm');
++        el.querySelector('#tr-result').innerHTML = `
++          <video controls playsinline src="${URL.createObjectURL(blob)}" style="width:100%;border-radius:12px;background:#000"></video>
++          <div class="btn-row">
++            <button class="btn primary" id="tr-save">💾 Save to Files</button>
++            <button class="btn ghost" id="tr-dl">⬇️ Download</button>
++          </div>`;
++        el.querySelector('#tr-save').addEventListener('click', async () => { await addFile(blob, name); await refreshFiles(); toast('Saved 💾', 'ok'); });
++        el.querySelector('#tr-dl').addEventListener('click', () => download(blob, name));
++        toast('Trim done ✂️', 'ok');
++      } catch (err) {
++        toast('Trim failed: ' + err.message, 'error', 6000);
++      } finally {
++        btn.disabled = false;
++        btn.textContent = '✂️ Trim & export';
++      }
++    });
++  }
++});
++
++async function trimVideo(blob, { start, end, speed = 1, mute = false }) {
++  const url = URL.createObjectURL(blob);
++  try {
++    const v = document.createElement('video');
++    v.src = url;
++    v.muted = mute;
++    v.playsInline = true;
++    await new Promise((res, rej) => { v.onloadedmetadata = res; v.onerror = () => rej(new Error('Cannot read video')); });
++    const W = v.videoWidth || 640, H = v.videoHeight || 360;
++    const c = document.createElement('canvas');
++    c.width = W; c.height = H;
++    const ctx = c.getContext('2d');
++    ctx.fillStyle = '#000';
++    ctx.fillRect(0, 0, W, H);
++    ctx.drawImage(v, 0, 0, W, H);
++
++    const fps = 30;
++    const canvasStream = c.captureStream(fps);
++    let tracks;
++    try {
++      const es = v.captureStream ? v.captureStream() : null;
++      const audioTracks = es && !mute ? es.getAudioTracks() : [];
++      tracks = [...canvasStream.getVideoTracks(), ...audioTracks];
++    } catch { tracks = canvasStream.getVideoTracks(); }
++    const stream = new MediaStream(tracks);
++
++    const mime = (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2'))
++      ? 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'
++      : (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus') ? 'video/webm;codecs=vp9,opus' : 'video/webm');
++    const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6_000_000 });
++    const chunks = [];
++    rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
++    const stopped = new Promise((res) => { rec.onstop = res; });
++
++    v.currentTime = start;
++    await new Promise((res) => { const d = () => { v.removeEventListener('seeked', d); res(); }; v.addEventListener('seeked', d); });
++    rec.start(200);
++    v.playbackRate = speed;
++    await v.play();
++
++    await new Promise((resolve) => {
++      const loop = () => {
++        if (v.currentTime >= end || v.ended) { resolve(); return; }
++        ctx.drawImage(v, 0, 0, W, H);
++        requestAnimationFrame(loop);
++      };
++      requestAnimationFrame(loop);
++    });
++    v.pause();
++    await new Promise((r) => setTimeout(r, 250));
++    rec.stop();
++    await stopped;
++    tracks.forEach((t) => t.stop());
++    return new Blob(chunks, { type: mime });
++  } finally {
++    URL.revokeObjectURL(url);
++  }
++}
++
++/* ================= INSIGHTS ================= */
++tool({
++  id: 'insights', name: 'Insights', icon: '📊',
++  desc: 'Storage stats, file types, largest files & activity',
++  async render(el) {
++    const files = await allFiles();
++    const total = files.reduce((n, f) => n + f.size, 0);
++    const byType = {};
++    files.forEach((f) => {
++      const k = f.vault ? '🔒 vault' : (f.type || 'other').split('/')[0];
++      byType[k] = { n: (byType[k]?.n || 0) + 1, size: (byType[k]?.size || 0) + f.size };
++    });
++    const days = {};
++    files.forEach((f) => {
++      const d = new Date(f.addedAt).toISOString().slice(0, 10);
++      days[d] = (days[d] || 0) + 1;
++    });
++    const last14 = [...Array(14)].map((_, i) => {
++      const d = new Date(Date.now() - (13 - i) * 864e5).toISOString().slice(0, 10);
++      return { d, n: days[d] || 0 };
++    });
++    const maxDay = Math.max(1, ...last14.map((x) => x.n));
++    const biggest = [...files].sort((a, b) => b.size - a.size).slice(0, 8);
++    const dupGroups = new Map();
++    files.filter((f) => f.hash).forEach((f) => {
++      dupGroups.set(f.hash, (dupGroups.get(f.hash) || 0) + 1);
++    });
++    const dupes = [...dupGroups.values()].filter((n) => n > 1).reduce((n, g) => n + g - 1, 0);
++
++    el.innerHTML = `
++      <div class="insight-cards">
++        <div class="card"><b>${files.length}</b><span>files</span></div>
++        <div class="card"><b>${fmtBytes(total)}</b><span>total size</span></div>
++        <div class="card"><b>${files.filter((f) => f.vault).length}</b><span>in vault 🔒</span></div>
++        <div class="card"><b>${dupes || 0}</b><span>likely duplicates</span></div>
++      </div>
++      <h4>By type</h4>
++      ${Object.entries(byType).sort((a, b) => b[1].size - a[1].size).map(([k, v]) => `
++        <div class="bar-row"><span class="bar-label">${esc(k)}</span>
++          <div class="bar"><div style="width:${Math.max(2, v.size / total * 100)}%"></div></div>
++          <span class="muted">${v.n} · ${fmtBytes(v.size)}</span></div>`).join('')}
++      <h4 style="margin-top:16px">Last 14 days</h4>
++      <div class="day-chart">${last14.map((x) => `
++        <div class="day-col" title="${x.d}: ${x.n} file(s)"><div class="day-bar" style="height:${x.n / maxDay * 60 + 3}px"></div><span>${x.d.slice(8)}</span></div>`).join('')}
++      </div>
++      <h4 style="margin-top:16px">Largest files</h4>
++      <ol class="big-list">${biggest.map((f) => `<li><span class="bar-label">${fileEmoji(f)} ${esc(f.name)}</span><span class="muted">${fmtBytes(f.size)} · ${fmtDate(f.addedAt)}</span></li>`).join('')}</ol>`;
++  }
++});
++
++function fileEmoji(f) {
++  return f.vault ? '🔒' : (f.type || '').startsWith('image/') ? '🖼️' : (f.type || '').startsWith('video/') ? '🎬' : (f.type || '').startsWith('audio/') ? '🎵' : '📄';
++}
++
++/* ================= hub wiring ================= */
++export async function init() {
++  const grid = $('#tools-grid');
++  grid.innerHTML = '';
++  REGISTRY.forEach((t) => {
++    const card = document.createElement('button');
++    card.className = 'tool-card';
++    card.innerHTML = `<div class="tool-icon">${t.icon}</div><b>${t.name}</b><span class="muted">${t.desc}</span>`;
++    card.addEventListener('click', () => openTool(t.id));
++    grid.appendChild(card);
++  });
++  $('#tool-back').addEventListener('click', () => {
++    $('#tool-detail').hidden = true;
++    grid.hidden = false;
++    $('#tool-body').innerHTML = '';
++  });
++}
++
++export async function openTool(id) {
++  const t = REGISTRY.find((x) => x.id === id);
++  if (!t) return;
++  emit('nav', 'tools');
++  const grid = $('#tools-grid');
++  await new Promise((r) => setTimeout(r, 0)); // let nav settle
++  grid.hidden = true;
++  const detail = $('#tool-detail');
++  detail.hidden = false;
++  detail.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
++  $('#tool-body').innerHTML = `<h3 class="tool-title">${t.icon} ${t.name}</h3>`;
++  await t.render($('#tool-body'));
++}
++
++export const toolIds = () => REGISTRY.map((t) => ({ id: t.id, name: t.name, icon: t.icon }));
+diff --git a/js/video.js b/js/video.js
+index 916ba32..e2ab5f1 100644
+--- a/js/video.js
+@@ -41,6 +41,7 @@ export async function init() {
+   });
+   $('#vid-audio-vol').addEventListener('input', (e) => { if (audioTrack) audioTrack.volume = parseFloat(e.target.value); });
+   $('#vid-audio-remove').addEventListener('click', () => { audioTrack = null; $('#vid-audio-row').hidden = true; });
++  $('#vid-voiceover').addEventListener('click', voiceover);
+ 
+   $('#vid-res').addEventListener('change', previewFirstFrame);
+   $('#vid-bg').addEventListener('input', previewFirstFrame);
+@@ -62,11 +63,37 @@ export async function init() {
+   syncUI();
+ }
+ 
+-function setAudio(blob, name) {
+-  audioTrack = { name, blob, volume: parseFloat($('#vid-audio-vol').value) || 0.8 };
+-  $('#vid-audio-name').textContent = '🎵 ' + name;
++function setAudio(blob, name, loop = true) {
++  audioTrack = { name, blob, volume: parseFloat($('#vid-audio-vol').value) || 0.8, loop };
++  $('#vid-audio-name').textContent = (loop ? '🎵 ' : '🎙 ') + name;
+   $('#vid-audio-row').hidden = false;
+-  toast('Music added — it will be mixed into the video 🎵', 'ok');
++  toast(loop ? 'Music added — it will be mixed into the video 🎵' : 'Voiceover ready — it plays once during the video 🎙', 'ok');
++}
++
++let voRec = null, voChunks = [], voStream = null;
++async function voiceover() {
++  const btn = $('#vid-voiceover');
++  if (voRec && voRec.state === 'recording') { voRec.stop(); return; }
++  try {
++    voStream = await navigator.mediaDevices.getUserMedia({ audio: true });
++  } catch {
++    toast('Microphone access denied.', 'error');
++    return;
++  }
++  voChunks = [];
++  voRec = new MediaRecorder(voStream);
++  voRec.ondataavailable = (e) => { if (e.data.size) voChunks.push(e.data); };
++  voRec.onstop = () => {
++    const blob = new Blob(voChunks, { type: voRec.mimeType || 'audio/webm' });
++    voStream.getTracks().forEach((t) => t.stop());
++    btn.textContent = '🎙 Voiceover';
++    btn.classList.remove('recording');
++    setAudio(blob, 'voiceover-' + Date.now().toString(36) + '.webm', false);
++  };
++  voRec.start();
++  btn.textContent = '⏺ Stop recording';
++  btn.classList.add('recording');
++  toast('Recording your voice… tap stop when done 🎙', 'info', 5000);
+ }
+ 
+ async function pick() {
+@@ -333,7 +360,7 @@ export async function startRender() {
+       const dest = audioCtx.createMediaStreamDestination();
+       audioSrc = audioCtx.createBufferSource();
+       audioSrc.buffer = buf;
+-      audioSrc.loop = true;
++      audioSrc.loop = audioTrack.loop !== false;
+       const gain = audioCtx.createGain();
+       gain.gain.value = audioTrack.volume;
+       audioSrc.connect(gain).connect(dest);
+diff --git a/manifest.webmanifest b/manifest.webmanifest
+index 2182263..dc10d34 100644
+--- a/manifest.webmanifest
+@@ -42,5 +42,25 @@
+     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+     { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
++  ],
++  "shortcuts": [
++    {
++      "name": "New chat",
++      "short_name": "Chat",
++      "url": "./#chat",
++      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
++    },
++    {
++      "name": "Make a video",
++      "short_name": "Video",
++      "url": "./#video",
++      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
++    },
++    {
++      "name": "AI image generator",
++      "short_name": "AI image",
++      "url": "./#tools",
++      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
++    }
+   ]
+ }
+diff --git a/server/index.js b/server/index.js
+index d20a873..be8eb20 100644
+--- a/server/index.js
+@@ -215,7 +215,9 @@ async function handleApi(req, res, url) {
+         folder: q.get('folder') || 'root',
+         tags: (q.get('tags') || '').split(',').filter(Boolean),
+         vault: q.get('vault') === '1',
+-        iv: q.get('iv') || ''
++        iv: q.get('iv') || '',
++        enc: q.get('enc') === '1',
++        encIv: q.get('encIv') || ''
+       };
+       saveDb();
+       return send(res, 200, { ok: true, id: fid });
+diff --git a/sw.js b/sw.js
+index cbbad6f..0fbc492 100644
+--- a/sw.js
+@@ -1,5 +1,5 @@
+-/* Ayomide Studio — Service Worker v2 (app shell + share-target intake) */
+-const VERSION = 'ayomide-studio-v2.0.0';
++/* Ayomide Studio — Service Worker v3 (app shell + share-target intake) */
++const VERSION = 'ayomide-studio-v3.0.0';
+ const ASSETS = [
+   './',
+   './index.html',
+@@ -15,6 +15,16 @@ const ASSETS = [
+   './js/exporter.js',
+   './js/sync.js',
+   './js/vault.js',
++  './js/tools.js',
++  './js/palette.js',
++  './js/i18n.js',
++  './js/aiimage.js',
++  './js/actions.js',
++  './js/batch.js',
++  './js/exif.js',
++  './js/gif.js',
++  './js/pdfmake.js',
++  './js/qr.js',
+   './icons/icon-192.png',
+   './icons/icon-512.png',
+   './icons/icon-maskable-512.png',
+@@ -59,8 +69,6 @@ async function staleWhileRevalidate(request) {
+ /* ---- share-target intake: stash shared files into IndexedDB for the app ---- */
+ function shareDbPut(files) {
+   return new Promise((resolve) => {
+-    let done = 0;
+-    const finish = () => { if (++done > files.length) resolve(); };
+     const req = indexedDB.open('ayomide-studio', 2);
+     req.onupgradeneeded = () => {
+       const d = req.result;
+-- 
+2.39.5

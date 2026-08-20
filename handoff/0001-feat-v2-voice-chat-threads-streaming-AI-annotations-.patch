@@ -1,0 +1,3844 @@
+From 6ae727b0adc6a9d2310985fdedc76096247ca1f8 Mon Sep 17 00:00:00 2001
+From: Ayomide Studio Agent <ogbas4991@users.noreply.github.com>
+Date: Thu, 20 Aug 2026 22:09:12 +0000
+Subject: [PATCH 1/4] =?UTF-8?q?feat:=20v2=20=E2=80=94=20voice=20chat,=20th?=
+ =?UTF-8?q?reads,=20streaming=20AI,=20annotations,=20watermark,=20auto-enh?=
+ =?UTF-8?q?ance,=20crop=20presets,=20music+titles=20in=20videos,=20folders?=
+ =?UTF-8?q?/tags/gallery/dupes/bulk,=20ZIP=20import,=20app=20lock=20+=20AE?=
+ =?UTF-8?q?S-256=20vault,=20share=20target,=20cloud=20sync=20server=20(zer?=
+ =?UTF-8?q?o-dep=20Node)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Co-authored-by: arena-agent <297053741+arena-agent@users.noreply.github.com>
+---
+ .gitignore           |   6 +
+ README.md            |  56 +++--
+ css/app.css          |  57 +++++
+ index.html           | 139 +++++++++++-
+ js/app.js            | 211 +++++++++++++++++-
+ js/chat.js           | 382 ++++++++++++++++++++++++-------
+ js/db.js             | 109 ++++++---
+ js/editor.js         | 338 ++++++++++++++++++++++++----
+ js/exporter.js       |  92 +++++++-
+ js/files.js          | 520 +++++++++++++++++++++++++++++++++++++------
+ js/sync.js           | 180 +++++++++++++++
+ js/utils.js          |  52 +++++
+ js/vault.js          |  37 +++
+ js/video.js          | 160 +++++++++++--
+ manifest.webmanifest |  30 ++-
+ render.yaml          |  16 ++
+ server/index.js      | 284 +++++++++++++++++++++++
+ server/package.json  |  14 ++
+ sw.js                |  57 ++++-
+ 19 files changed, 2471 insertions(+), 269 deletions(-)
+ create mode 100644 .gitignore
+ create mode 100644 js/sync.js
+ create mode 100644 js/vault.js
+ create mode 100644 render.yaml
+ create mode 100644 server/index.js
+ create mode 100644 server/package.json
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..6011f52
+--- /dev/null
+@@ -0,0 +1,6 @@
++# local server data (user accounts, synced blobs) — never commit
++server/data/
++
++# OS junk
++.DS_Store
++node_modules/
+diff --git a/README.md b/README.md
+index 42bf8be..407f081 100644
+--- a/README.md
+@@ -1,6 +1,6 @@
+ # Ayomide Studio 🎨🎬
+ 
+-A **Progressive Web App (PWA)** that works entirely in your browser — even offline.
++A **Progressive Web App (PWA)** that works entirely in your browser — even offline — with optional self-hosted cloud sync.
+ 
+ **Live site:** https://ogbas4991.github.io/Ayomide/
+ 
+@@ -8,38 +8,52 @@ A **Progressive Web App (PWA)** that works entirely in your browser — even off
+ 
+ | Feature | What it does |
+ |---|---|
+-| 💬 **Chat** | Built-in assistant that runs locally (offline). Attach images, ask how to use the app. Optionally connect any OpenAI-compatible API (OpenAI, Groq, OpenRouter, Ollama…) in Settings for real AI replies. |
+-| 📁 **Files** | Upload anything via drag & drop or picker. Preview images/video/audio/text, rename, download, delete. Everything stays on your device (IndexedDB). |
+-| 🎨 **Editor** | Rotate, flip, crop (drag a box), resize, and apply filters (brightness, contrast, saturation, hue, blur, grayscale, sepia) with one-tap presets. Undo/redo. Export as PNG/JPEG/WebP — save to Files or download. |
+-| 🎬 **Image → Video** | Turn one or more images into a real video file with Ken-Burns motion (zoom in/out, pan), fade transitions, custom duration, resolution (720p/1080p/square/vertical Reels), fps and background colour. |
+-| 📦 **Export** | Download any single file, or export everything (files + chat history) as a ZIP. Zero-dependency ZIP writer built in. |
+-| 📲 **Installable PWA** | Install to your home screen, launches standalone, fully offline via a service worker. |
++| 💬 **Chat** | Built-in offline assistant, 🎙 **voice input** (speech recognition), 🔊 **spoken replies**, **multiple conversation threads**, image attachments with local analysis. Optional: connect any OpenAI-compatible API for **streaming** real AI replies. |
++| 📁 **Files** | Drag & drop upload of anything, **folders**, **tags**, **gallery view** with lightbox, **duplicate finder**, bulk select (delete/move/zip), previews for image/video/audio/text, rename, download. All storage is local (IndexedDB) — nothing leaves your device. |
++| 🎨 **Editor** | ✨ **Auto-enhance**, rotate/flip, crop with **ratio presets** (1:1, 4:5, 16:9, 9:16…), resize, 7 filter sliders + presets, undo/redo. **Draw & annotate**: brush, arrows, rectangles, text, emoji stickers, pixelate (hide sensitive areas). **Watermark** (text, 9 positions, opacity). Export PNG/JPEG/WebP. |
++| 🎬 **Image → Video** | Images → real video file (MP4 where supported, else WebM) with Ken Burns motion, fades, **music track** 🎵 (real WebAudio mixing), **animated text titles**, multiple resolutions (720p/1080p/square/Reels), fps & background colour. |
++| 📦 **Export / Import** | Download any file, export everything as ZIP, and **import ZIP backups back** (also restores chat history). Zero-dependency ZIP reader/writer built in. |
++| 🔐 **Security** | **App lock** (PIN + optional fingerprint/Face ID via WebAuthn) and an **encrypted Vault** — AES-256-GCM with PBKDF2-derived keys; vault files are unreadable without your PIN. |
++| 📲 **PWA** | Installable, offline via service worker, **Share Target** (share images from your phone's share sheet straight into the app), File Handling API support. |
++| ☁️ **Cloud sync** | Optional self-hosted sync server (below): your files & chats on every device. |
+ 
+ ## Tech
+ 
+-- No build step, no frameworks, no external dependencies — plain HTML/CSS/ES modules.
+-- **Storage:** IndexedDB (files, chat, settings) — nothing ever leaves the device.
+-- **Image → Video:** `<canvas>` animation captured with `MediaRecorder` (records MP4 where supported, otherwise WebM).
+-- **PWA:** web app manifest + service worker (pre-cached app shell, stale-while-revalidate).
++- No frontend build step, no frameworks, no dependencies — plain HTML/CSS/ES modules.
++- **Storage:** IndexedDB (files, chat threads, settings) — device-only unless you enable sync.
++- **Video:** `<canvas>` animation + `MediaRecorder`, audio mixed live via `WebAudio`.
++- **Vault:** WebCrypto (PBKDF2 150k + AES-256-GCM).
++- **PWA:** manifest (with share target & file handlers) + service worker (pre-cached shell, stale-while-revalidate).
+ 
+ ## Run locally
+ 
+-Any static server works:
+-
+ ```bash
++# static only
+ python3 -m http.server 8080
+-# open http://localhost:8080
++
++# or: site + sync server together (recommended)
++node server/index.js   # → http://localhost:3000
+ ```
+ 
+-## Deploy
++## Cloud sync server
++
++`server/index.js` is a **zero-dependency Node server** (auth with scrypt + HMAC tokens, SQLite-free JSON meta + blob files on disk, 500MB/user quota) that also serves the PWA itself — one deployment gives you the app *and* its backend.
++
++**Deploy free (Render):**
++1. Push this repo to GitHub
++2. Open <https://render.com/deploy> and point it at your repo (or use the *New Web Service* flow with `render.yaml` in this repo)
++3. Once live, open the app → Settings → Cloud sync → enter your server URL, create an account, done.
++
++> ⚠️ Render's free plan has an **ephemeral filesystem** (data resets on redeploy) — great for testing.
++> For persistent sync use **Railway** or **Fly.io** with a volume, or a paid Render disk. Env vars: `PORT`, `DATA_DIR`.
++
++**In the app:** Settings → Cloud sync → server URL + email + password → *Create account* → *Sync now*.
++Sync merges files and chat by id (last-write-wins), pushes/pulls automatically after changes, and syncs Vault files while keeping them encrypted.
+ 
+-Live at: **https://ogbas4991.github.io/Ayomide/**
++## Deploy the PWA
+ 
+ GitHub Pages serves this repo's `main` branch — every push to `main` redeploys automatically.
+ 
+-**First-time setup (repo admin, ~30 seconds):**
+-1. Open **Settings → Pages** in the repo
+-2. Source: **Deploy from a branch**
+-3. Branch: **`main`** / `(root)` → **Save**
++**First-time setup (repo admin):** Settings → Pages → Source: *Deploy from a branch* → `main` / `(root)` → Save.
+ 
+-The site also runs anywhere static files run (Netlify, Vercel, Cloudflare, any web server) — no build step required.
++The site also runs anywhere static files run (Netlify, Vercel, Cloudflare…) — no build step required.
+diff --git a/css/app.css b/css/app.css
+index 9a72e8d..7805edd 100644
+--- a/css/app.css
+@@ -336,3 +336,60 @@ label.inline { display: flex; align-items: center; gap: 6px; font-size: 13px; co
+   .toolbar input[type="search"] { max-width: none; flex: 1; }
+   .files-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+ }
++
++/* ================= v2 additions ================= */
++
++/* chat thread bar */
++#chat-thread-bar { display: flex; gap: 8px; padding: 12px 20px 0; align-items: center; }
++#chat-thread-bar select { flex: 1; min-width: 0; }
++@media (max-width: 760px) { #chat-thread-bar { padding: 10px 14px 0; } }
++
++#chat-mic.listening { background: var(--danger); border-color: var(--danger); animation: pulse 1.2s infinite; }
++@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(248,113,113,.5); } 50% { box-shadow: 0 0 0 8px rgba(248,113,113,0); } }
++#chat-tts.on { background: rgba(52,211,153,.15); border-color: var(--ok); }
++
++/* chip rows (tags) */
++.chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
++.chip-row:empty { display: none; }
++.chip { background: var(--card); border: 1px solid var(--border); color: var(--muted); border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
++.chip.active { background: rgba(124,92,255,.2); border-color: var(--acc); color: #c9bcff; }
++.chip.lockchip { border-color: rgba(251,191,36,.4); color: var(--warn); }
++
++/* bulk bar */
++.bulk-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--card); border: 1px solid var(--acc); border-radius: 10px; padding: 8px 12px; margin: 12px 0; }
++
++/* gallery view */
++.files-grid.gallery { display: block; columns: 3 240px; column-gap: 12px; }
++.files-grid.gallery .file-card { margin-bottom: 12px; break-inside: avoid; }
++.files-grid.gallery .file-thumb { height: auto; }
++.files-grid.gallery .file-thumb img { height: auto; position: static; }
++.files-grid.gallery .file-body { padding: 6px 10px; }
++
++.lightbox img { max-width: 100%; max-height: 70dvh; border-radius: 10px; display: block; margin: 0 auto; }
++.lightbox-nav { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
++
++/* editor tools */
++#ed-tools .btn.active { background: var(--grad); border-color: transparent; color: #fff; }
++.emoji-palette { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 8px; margin: 6px 0; }
++.emoji-palette button { background: none; border: 0; font-size: 20px; cursor: pointer; padding: 4px; border-radius: 6px; }
++.emoji-palette button:hover { background: var(--card2); }
++.text-tool-input { position: absolute; z-index: 6; background: var(--bg2); border: 1px solid var(--acc2); border-radius: 6px; color: var(--text); padding: 4px 8px; font-size: 14px; min-width: 140px; }
++.crop-ratio { width: auto !important; padding: 7px 8px !important; }
++
++/* video audio row + clip titles */
++.audio-row { display: flex; gap: 8px; align-items: center; background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 8px; }
++.audio-row span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
++.title-editor { background: var(--bg); border: 1px dashed var(--border); border-radius: 8px; padding: 8px; margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
++.title-editor .row { gap: 6px; }
++.title-editor input[type="text"] { padding: 5px 8px; font-size: 13px; }
++.title-editor select { padding: 5px 6px; font-size: 12px; width: auto; }
++
++/* lock screen */
++#lock-screen { position: fixed; inset: 0; z-index: 300; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 20px; }
++#lock-screen[hidden] { display: none; }
++.lock-box { width: min(92vw, 360px); text-align: center; display: flex; flex-direction: column; gap: 12px; }
++.lock-box img { width: 72px; height: 72px; border-radius: 18px; margin: 0 auto; }
++.lock-box h2 { margin: 0; }
++.lock-box input { text-align: center; font-size: 20px; letter-spacing: .4em; }
++.lock-box.shake { animation: shake .4s; }
++@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+diff --git a/index.html b/index.html
+index 3bf0820..ee6f421 100644
+--- a/index.html
+@@ -3,7 +3,7 @@
+ <head>
+   <meta charset="utf-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+-  <meta name="description" content="Ayomide Studio — chat, upload & edit files, and turn images into videos. Works offline.">
++  <meta name="description" content="Ayomide Studio — chat, upload & edit files, turn images into videos, cloud sync. Works offline.">
+   <meta name="theme-color" content="#0b0d14">
+   <title>Ayomide Studio</title>
+   <link rel="manifest" href="./manifest.webmanifest">
+@@ -34,6 +34,7 @@
+         <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span>Settings</button>
+       </nav>
+       <div class="side-foot">
++        <button id="btn-lock-now" class="btn block" hidden>🔒 Lock now</button>
+         <button id="btn-install" class="btn primary block" hidden>📲 Install app</button>
+         <div id="net-status" class="net-status"><span class="dot"></span><span id="net-text">Online</span></div>
+       </div>
+@@ -50,6 +51,11 @@
+       <!-- ============ CHAT ============ -->
+       <section id="view-chat" class="view active">
+         <div class="chat-col">
++          <div id="chat-thread-bar">
++            <select id="thread-select" title="Conversations"></select>
++            <button id="btn-new-thread" class="btn slim" title="New conversation">＋ New</button>
++            <button id="btn-del-thread" class="btn slim ghost" title="Delete this conversation">🗑</button>
++          </div>
+           <div id="chat-scroll" class="chat-scroll">
+             <div id="chat-list" class="chat-list"></div>
+           </div>
+@@ -61,7 +67,9 @@
+             </div>
+             <div class="chat-input-row">
+               <button type="button" id="chat-attach" class="icon-btn" title="Attach an image">📎</button>
++              <button type="button" id="chat-mic" class="icon-btn" title="Speak — voice input">🎙</button>
+               <input id="chat-input" type="text" placeholder="Message Ayomide Assistant…" enterkeyhint="send">
++              <button type="button" id="chat-tts" class="icon-btn" title="Read replies aloud">🔇</button>
+               <button type="submit" id="chat-send" class="send-btn" title="Send">➤</button>
+             </div>
+           </form>
+@@ -88,14 +96,29 @@
+             <option value="audio">Audio</option>
+             <option value="text">Text</option>
+           </select>
++          <select id="folder-select" title="Folder"><option value="root">📂 All files</option></select>
++          <button id="btn-new-folder" class="btn slim" title="New folder">📁＋</button>
+           <span class="spacer"></span>
+           <span id="files-count" class="muted"></span>
+-          <button id="btn-export-zip" class="btn ghost">📦 Export all (.zip)</button>
++          <button id="btn-view-toggle" class="btn slim" title="Gallery view">🖼</button>
++          <button id="btn-find-dupes" class="btn slim" title="Find duplicate files">♻️</button>
++          <button id="btn-import-zip" class="btn slim" title="Import a ZIP backup">🧳</button>
++          <input type="file" id="zip-input" accept=".zip,application/zip" hidden>
++          <button id="btn-export-zip" class="btn ghost slim">📦 Export all (.zip)</button>
++          <button id="btn-bulk" class="btn slim">☑️ Select</button>
++        </div>
++        <div id="bulk-bar" class="bulk-bar" hidden>
++          <b id="bulk-count">0 selected</b>
++          <button id="bulk-delete" class="btn danger slim">🗑 Delete</button>
++          <button id="bulk-move" class="btn slim">📁 Move to…</button>
++          <button id="bulk-zip" class="btn slim">📦 Download ZIP</button>
++          <button id="bulk-cancel" class="btn ghost slim">Cancel</button>
+         </div>
++        <div id="tag-row" class="chip-row"></div>
+         <div id="files-grid" class="files-grid"></div>
+         <div id="files-empty" class="empty">
+           <div class="empty-icon">🗂️</div>
+-          <p>No files yet. Upload images, videos, documents — anything.<br>Everything stays on your device.</p>
++          <p>No files here yet. Upload images, videos, documents — anything.<br>Everything stays on your device.</p>
+         </div>
+       </section>
+ 
+@@ -105,7 +128,7 @@
+           <div class="stage-wrap">
+             <div id="editor-placeholder" class="empty">
+               <div class="empty-icon">🎨</div>
+-              <p>Load an image to start editing.<br>Rotate, flip, crop, resize, filters — then save or export.</p>
++              <p>Load an image to start editing — crop, filters, draw, watermark, and more.</p>
+               <div class="row">
+                 <button id="ed-pick" class="btn primary">📁 Choose from Files</button>
+                 <button id="ed-upload" class="btn ghost">⬆️ Upload image</button>
+@@ -115,10 +138,31 @@
+             <div id="editor-stage" class="editor-stage" hidden>
+               <canvas id="editor-canvas"></canvas>
+               <div id="crop-layer" class="crop-layer" hidden></div>
++              <input id="ed-text-tool-input" class="text-tool-input" hidden placeholder="Type + Enter">
+               <div id="crop-hint" class="crop-hint" hidden>Drag on the image to select the crop area · <b id="crop-size"></b></div>
+             </div>
+           </div>
+           <aside class="panel">
++            <h3>Quick fixes</h3>
++            <div class="btn-row">
++              <button id="ed-auto" class="btn">✨ Auto-enhance</button>
++            </div>
++            <h3>Tools</h3>
++            <div class="btn-row wrap" id="ed-tools">
++              <button data-tool="none" class="btn slim active" title="Pan / no tool">👆</button>
++              <button data-tool="brush" class="btn slim" title="Brush">🖌</button>
++              <button data-tool="arrow" class="btn slim" title="Arrow">➚</button>
++              <button data-tool="rect" class="btn slim" title="Rectangle">▭</button>
++              <button data-tool="text" class="btn slim" title="Text">🅣</button>
++              <button data-tool="emoji" class="btn slim" title="Emoji sticker">😀</button>
++              <button data-tool="pixel" class="btn slim" title="Pixelate (hide area)">▦</button>
++            </div>
++            <div class="row" id="ed-tool-opts">
++              <input type="color" id="ed-color" value="#22d3ee" title="Colour">
++              <label class="inline grow">Size <input type="range" id="ed-size" min="2" max="48" value="6"></label>
++              <button id="ed-clear-marks" class="btn slim ghost" title="Remove all marks">Clear</button>
++            </div>
++            <div id="emoji-palette" class="emoji-palette" hidden></div>
+             <h3>Transform</h3>
+             <div class="btn-row">
+               <button id="ed-rot-l" class="btn" title="Rotate left">⟲</button>
+@@ -128,6 +172,15 @@
+             </div>
+             <div class="btn-row">
+               <button id="ed-crop-start" class="btn">✂️ Crop</button>
++              <select id="ed-crop-ratio" class="crop-ratio" title="Aspect ratio">
++                <option value="free">Free</option>
++                <option value="1:1">1:1</option>
++                <option value="4:5">4:5</option>
++                <option value="3:2">3:2</option>
++                <option value="16:9">16:9</option>
++                <option value="9:16">9:16</option>
++                <option value="2:3">2:3</option>
++              </select>
+               <button id="ed-crop-apply" class="btn ok" hidden>Apply crop</button>
+               <button id="ed-crop-cancel" class="btn ghost" hidden>Cancel</button>
+             </div>
+@@ -145,6 +198,21 @@
+             <div class="btn-row">
+               <button id="ed-reset-filters" class="btn ghost">Reset filters</button>
+             </div>
++            <h3>Watermark</h3>
++            <label class="check"><input id="wm-on" type="checkbox"> Enable watermark</label>
++            <input id="wm-text" type="text" placeholder="© Your name or brand">
++            <div class="row">
++              <label class="inline">Pos
++                <select id="wm-pos">
++                  <option value="tl">↖</option><option value="tc">↑</option><option value="tr">↗</option>
++                  <option value="cl">←</option><option value="cc" selected>•</option><option value="cr">→</option>
++                  <option value="bl">↙</option><option value="bc">↓</option><option value="br" selected>↘</option>
++                </select>
++              </label>
++              <input type="color" id="wm-color" value="#ffffff" title="Colour">
++              <label class="inline grow">Size <input id="wm-size" type="range" min="10" max="90" value="26"></label>
++            </div>
++            <label class="field">Opacity <input id="wm-opacity" type="range" min="10" max="100" value="55"></label>
+             <h3>Export</h3>
+             <div class="row">
+               <select id="ed-format" style="width:90px">
+@@ -171,7 +239,7 @@
+           <div class="stage-wrap">
+             <div id="video-placeholder" class="empty">
+               <div class="empty-icon">🎬</div>
+-              <p>Turn one or more images into a video with motion & fades.</p>
++              <p>Turn one or more images into a video with motion, fades, music and titles.</p>
+               <div class="row">
+                 <button id="vid-pick-2" class="btn primary">📁 From Files</button>
+                 <button id="vid-upload-2" class="btn ghost">⬆️ Upload</button>
+@@ -200,6 +268,17 @@
+               <input type="file" id="vid-upload-input" accept="image/*" multiple hidden>
+             </div>
+             <ol id="clip-list" class="clip-list"></ol>
++            <h3>Music 🎵</h3>
++            <div class="btn-row">
++              <button id="vid-audio-pick" class="btn slim">🎵 From Files</button>
++              <button id="vid-audio-upload" class="btn ghost slim">⬆️ Upload</button>
++              <input type="file" id="vid-audio-input" accept="audio/*" hidden>
++            </div>
++            <div id="vid-audio-row" class="audio-row" hidden>
++              <span id="vid-audio-name" class="muted"></span>
++              <label class="inline grow">Vol <input id="vid-audio-vol" type="range" min="0" max="1" step="0.05" value="0.8"></label>
++              <button id="vid-audio-remove" class="btn slim ghost">✕</button>
++            </div>
+             <h3>Output</h3>
+             <label class="field">Resolution
+               <select id="vid-res">
+@@ -237,7 +316,7 @@
+           <div class="card">
+             <h3>🤖 AI chat provider <span class="badge" id="ai-badge">Local assistant</span></h3>
+             <p class="muted">The built-in assistant works fully offline. Optionally connect any OpenAI-compatible API
+-              (OpenAI, Groq, OpenRouter, local Ollama…) for real AI replies. Your key is stored only on this device.</p>
++              (OpenAI, Groq, OpenRouter, local Ollama…) for real AI replies with streaming. Your key is stored only on this device.</p>
+             <label class="check"><input type="checkbox" id="ai-enabled"> Use external AI provider</label>
+             <label class="field">Base URL <input id="ai-url" type="url" placeholder="https://api.openai.com/v1"></label>
+             <label class="field">API key <input id="ai-key" type="password" placeholder="sk-…"></label>
+@@ -247,21 +326,51 @@
+               <button id="ai-test" class="btn ghost">Test connection</button>
+             </div>
+           </div>
++
++          <div class="card">
++            <h3>☁️ Cloud sync <span class="badge" id="sync-badge">Off</span></h3>
++            <p class="muted">Sync files &amp; chats across your devices through your own sync server
++              (free one-click deploy on Render — see the README). Credentials live only on this device.</p>
++            <label class="field">Server URL <input id="sync-url" type="url" placeholder="https://your-server.onrender.com"></label>
++            <label class="field">Email <input id="sync-email" type="email" placeholder="you@example.com"></label>
++            <label class="field">Password <input id="sync-pass" type="password"></label>
++            <div class="btn-row wrap">
++              <button id="sync-signin" class="btn primary">Sign in</button>
++              <button id="sync-register" class="btn">Create account</button>
++              <button id="sync-now" class="btn ghost" hidden>🔄 Sync now</button>
++              <button id="sync-out" class="btn warn" hidden>Sign out</button>
++            </div>
++            <p class="muted" id="sync-status"></p>
++          </div>
++
++          <div class="card">
++            <h3>🔒 Security</h3>
++            <p class="muted">App lock asks for your PIN (or fingerprint) whenever the app opens.
++              The <b>Vault</b> encrypts chosen files with AES-256 — they stay unreadable even with full device access.</p>
++            <div class="btn-row wrap">
++              <button id="lock-setup" class="btn primary">🔐 Enable app lock &amp; vault</button>
++              <button id="lock-disable" class="btn warn" hidden>Disable lock</button>
++              <button id="lock-bio-setup" class="btn" hidden>👆 Add fingerprint unlock</button>
++            </div>
++          </div>
++
+           <div class="card">
+             <h3>📦 Data</h3>
+             <p class="muted" id="storage-usage">…</p>
+             <div class="progress slim"><div id="storage-bar"></div></div>
+             <div class="btn-row wrap">
+               <button id="btn-export-zip-2" class="btn">📦 Export everything (.zip)</button>
++              <button id="btn-import-zip-2" class="btn">🧳 Import backup (.zip)</button>
+               <button id="btn-clear-chat" class="btn warn">Clear chat history</button>
+               <button id="btn-clear-files" class="btn danger">Delete all files</button>
+             </div>
+           </div>
++
+           <div class="card">
+             <h3>ℹ️ About</h3>
+-            <p class="muted">Ayomide Studio v1.0 — a Progressive Web App. Chat with the assistant, upload &amp; manage
+-              files, edit images, and convert images to video — all in your browser, even offline. Your files never
+-              leave your device.</p>
++            <p class="muted">Ayomide Studio v2.0 — a Progressive Web App. Chat (voice + threads), file management with
++              folders/tags/vault, image editing with annotations &amp; watermark, image-to-video with music &amp; titles,
++              cloud sync, and full offline use. Your files never leave your device unless you enable sync.</p>
+             <div class="btn-row">
+               <button id="btn-install-2" class="btn primary" hidden>📲 Install app</button>
+               <button id="btn-refresh" class="btn ghost">🔄 Check for updates</button>
+@@ -280,6 +389,18 @@
+     <button class="nav-item" data-tab="settings"><span class="nav-ico">⚙️</span><span>More</span></button>
+   </nav>
+ 
++  <!-- lock screen -->
++  <div id="lock-screen" hidden>
++    <div class="lock-box">
++      <img src="icons/icon-192.png" alt="">
++      <h2>Ayomide Studio</h2>
++      <input id="lock-pin" type="password" inputmode="numeric" autocomplete="off" placeholder="Enter your PIN">
++      <button id="lock-unlock" class="btn primary big">Unlock</button>
++      <button id="lock-biometric" class="btn ghost block" hidden>👆 Unlock with fingerprint / Face ID</button>
++      <p class="muted">Vault files are encrypted — they can't be opened without this PIN.</p>
++    </div>
++  </div>
++
+   <div id="toasts" aria-live="polite"></div>
+   <div id="modal-root"></div>
+ 
+diff --git a/js/app.js b/js/app.js
+index 665b8aa..b25e62a 100644
+--- a/js/app.js
+@@ -1,11 +1,13 @@
+-/* Ayomide Studio — app shell: navigation, PWA install, service worker, settings */
+-import { $, $$, on, emit, toast, confirmDialog, fmtBytes } from './utils.js';
++/* Ayomide Studio — app shell: nav, lock screen, PWA install, SW, settings, sync wiring */
++import { $, $$, on, emit, toast, modal, confirmDialog, fmtBytes, sha256Hex } from './utils.js';
+ import * as chat from './chat.js';
+ import * as files from './files.js';
+ import * as editor from './editor.js';
+ import * as video from './video.js';
+-import { clearChat, clearFiles, kvGet, kvSet, storageEstimate } from './db.js';
++import { clearChat, clearFiles, kvGet, kvSet, storageEstimate, drainShareIn } from './db.js';
+ import { exportEverything } from './exporter.js';
++import { lockConfig, setupLock, disableLock, verifyPin, unlockVault, vaultReady } from './vault.js';
++import { initSyncUI } from './sync.js';
+ 
+ const TITLES = {
+   chat: 'Chat', files: 'Files', editor: 'Image Editor', video: 'Image → Video', settings: 'Settings'
+@@ -14,6 +16,7 @@ const TITLES = {
+ let deferredPrompt = null;
+ let swReg = null;
+ let reloading = false;
++let appUnlocked = false;
+ 
+ /* ---------- navigation ---------- */
+ function nav(tab) {
+@@ -34,14 +37,173 @@ async function boot() {
+   on('open-video-with', async ({ ids }) => { nav('video'); await video.addFileIds(ids); });
+   on('files:changed', updateStorage);
+ 
++  await initLock();
++  initSecurity();
+   initSettings();
+   initInstall();
+   initSW();
+   initNet();
++  initShareIn();
++  initLaunchQueue();
++  await initSyncUI();
+   updateStorage();
+ }
+ boot();
+ 
++/* ---------- lock screen ---------- */
++async function initLock() {
++  const cfg = await lockConfig();
++  if (!cfg) return;
++  $('#lock-screen').hidden = false;
++  $('#lock-biometric').hidden = !cfg.credId;
++  const pinInput = $('#lock-pin');
++  pinInput.focus();
++
++  const tryUnlock = async () => {
++    const pin = pinInput.value;
++    if (!(await verifyPin(pin))) {
++      pinInput.value = '';
++      const box = document.querySelector('.lock-box');
++      box.classList.remove('shake');
++      void box.offsetWidth;
++      box.classList.add('shake');
++      toast('Wrong PIN', 'error');
++      return;
++    }
++    try {
++      await unlockVault(pin);
++      toast(vaultReady() ? 'Unlocked — vault ready 🔓' : 'Unlocked', 'ok');
++    } catch { toast('Unlocked (vault key failed)', 'warn'); }
++    doUnlock();
++  };
++
++  const doUnlock = () => {
++    appUnlocked = true;
++    $('#lock-screen').hidden = true;
++    pinInput.value = '';
++  };
++
++  $('#lock-unlock').addEventListener('click', tryUnlock);
++  pinInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
++
++  $('#lock-biometric').addEventListener('click', async () => {
++    try {
++      const challenge = crypto.getRandomValues(new Uint8Array(32));
++      await navigator.credentials.get({
++        publicKeyKey: undefined,
++        publicKey: {
++          challenge,
++          userVerification: 'preferred',
++          allowCredentials: [{
++            type: 'public-key',
++            id: Uint8Array.from(cfg.credId.match(/../g).map((h) => parseInt(h, 16)))
++          }],
++          timeout: 60000
++        }
++      });
++      toast('Unlocked with biometrics 👆 (enter your PIN once in Settings to open Vault files this session)', 'ok', 6000);
++      doUnlock();
++    } catch {
++      toast('Biometric unlock failed — use your PIN.', 'error');
++    }
++  });
++}
++
++function initSecurity() {
++  refreshSecurityButtons();
++
++  $('#lock-setup').addEventListener('click', () => {
++    const body = document.createElement('div');
++    body.innerHTML = `
++      <p class="muted">Pick a PIN (4+ digits). It unlocks the app and encrypts Vault files (AES-256).
++      Don't forget it — the Vault can't be opened without it.</p>
++      <label class="field">PIN <input id="pin1" type="password" inputmode="numeric" autocomplete="off"></label>
++      <label class="field">Repeat PIN <input id="pin2" type="password" inputmode="numeric" autocomplete="off"></label>`;
++    modal({
++      title: '🔐 Enable app lock & vault',
++      body,
++      actions: [
++        { label: 'Cancel', cls: 'ghost' },
++        {
++          label: 'Enable', cls: 'primary', onClick: async (close) => {
++            const p1 = body.querySelector('#pin1').value;
++            const p2 = body.querySelector('#pin2').value;
++            if (!/^\d{4,12}$/.test(p1)) { toast('PIN must be 4–12 digits.', 'warn'); return; }
++            if (p1 !== p2) { toast('PINs do not match.', 'warn'); return; }
++            await setupLock(p1);
++            await unlockVault(p1).catch(() => { });
++            close();
++            refreshSecurityButtons();
++            toast('App lock & Vault enabled 🔐 — use the 🔒 button on any file card to encrypt it.', 'ok', 6000);
++          }
++        }
++      ]
++    });
++  });
++
++  $('#lock-disable').addEventListener('click', async () => {
++    const cfg = await lockConfig();
++    if (!cfg) return;
++    const body = document.createElement('div');
++    body.innerHTML = `<label class="field">Enter your PIN to disable the lock
++      <input id="pinv" type="password" inputmode="numeric"></label>`;
++    modal({
++      title: 'Disable app lock',
++      body,
++      actions: [
++        { label: 'Cancel', cls: 'ghost' },
++        {
++          label: 'Disable', cls: 'danger', onClick: async (close) => {
++            const pin = body.querySelector('#pinv').value;
++            if (!(await verifyPin(pin))) { toast('Wrong PIN', 'error'); return; }
++            await disableLock();
++            close();
++            refreshSecurityButtons();
++            toast('Lock disabled. Vault files remain encrypted — restore them before they can be opened.', 'warn', 6000);
++          }
++        }
++      ]
++    });
++  });
++
++  $('#lock-bio-setup').addEventListener('click', async () => {
++    const cfg = await lockConfig();
++    if (!cfg) { toast('Enable the lock first.', 'warn'); return; }
++    try {
++      const challenge = crypto.getRandomValues(new Uint8Array(32));
++      const cred = await navigator.credentials.create({
++        publicKey: {
++          challenge,
++          rp: { name: 'Ayomide Studio' },
++          user: {
++            id: new TextEncoder().encode('ayomide-user'),
++            name: 'Ayomide Studio user',
++            displayName: 'Ayomide Studio user'
++          },
++          pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
++          authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'preferred' },
++          timeout: 60000
++        }
++      });
++      cfg.credId = [...new Uint8Array(cred.rawId)].map((b) => b.toString(16).padStart(2, '0')).join('');
++      await kvSet('lock', cfg);
++      toast('Fingerprint / Face ID unlock added 👆', 'ok');
++    } catch (err) {
++      toast('Biometric setup failed: ' + (err.message || 'not supported here'), 'error', 6000);
++    }
++  });
++
++  $('#btn-lock-now').addEventListener('click', () => location.reload());
++}
++
++async function refreshSecurityButtons() {
++  const cfg = await lockConfig();
++  $('#lock-disable').hidden = !cfg;
++  $('#lock-bio-setup').hidden = !cfg;
++  $('#btn-lock-now').hidden = !cfg;
++  $('#lock-setup').hidden = !!cfg;
++}
++
+ /* ---------- settings ---------- */
+ async function initSettings() {
+   const cfg = await kvGet('ai', {});
+@@ -80,9 +242,10 @@ async function initSettings() {
+   });
+ 
+   $('#btn-export-zip-2').addEventListener('click', exportEverything);
++  $('#btn-import-zip-2').addEventListener('click', () => files.importZipPick());
+ 
+   $('#btn-clear-chat').addEventListener('click', async () => {
+-    if (await confirmDialog('Clear chat history?', 'Your entire conversation will be removed from this device.', { danger: true, okLabel: 'Clear' })) {
++    if (await confirmDialog('Clear chat history?', 'All conversations will be removed from this device.', { danger: true, okLabel: 'Clear' })) {
+       await clearChat();
+       await chat.resetChat();
+       toast('Chat history cleared 🧹', 'ok');
+@@ -90,7 +253,7 @@ async function initSettings() {
+   });
+ 
+   $('#btn-clear-files').addEventListener('click', async () => {
+-    if (await confirmDialog('Delete all files?', 'Every uploaded/created file will be permanently removed from this device. Export first if you need a backup.', { danger: true, okLabel: 'Delete all' })) {
++    if (await confirmDialog('Delete all files?', 'Every file (including Vault files) will be permanently removed from this device. Export first if you need a backup.', { danger: true, okLabel: 'Delete all' })) {
+       await clearFiles();
+       await files.refresh();
+       toast('All files deleted', 'ok');
+@@ -117,6 +280,44 @@ async function updateStorage() {
+   $('#storage-bar').style.width = Math.max(pct, 0.5) + '%';
+ }
+ 
++/* ---------- share target (files shared from the OS) ---------- */
++async function drainShareQueue() {
++  try {
++    const rows = await drainShareIn();
++    if (!rows.length) return;
++    const list = rows.map((r) => {
++      try { return new File([r.blob], r.name || 'shared-file', { type: r.type || '' }); }
++      catch { const b = r.blob; b.name = r.name; return b; }
++    });
++    await files.handleFileList(list);
++    toast(`Received ${list.length} shared file(s) 📲`, 'ok');
++  } catch { /* noop */ }
++}
++function initShareIn() {
++  drainShareQueue();
++  document.addEventListener('visibilitychange', () => { if (!document.hidden) drainShareQueue(); });
++}
++
++/* ---------- file handling API (open images from the OS) ---------- */
++function initLaunchQueue() {
++  if (!('launchQueue' in window)) return;
++  window.launchQueue.setConsumer(async (launchParams) => {
++    const fs = launchParams.files || [];
++    if (!fs.length) return;
++    const first = fs[0];
++    try {
++      const file = await first.getFile();
++      if (file.type.startsWith('image/')) {
++        nav('editor');
++        await editor.loadBlob(file, file.name);
++      } else {
++        await files.handleFileList([file]);
++        nav('files');
++      }
++    } catch { /* noop */ }
++  });
++}
++
+ /* ---------- PWA install ---------- */
+ function initInstall() {
+   const show = () => { $('#btn-install').hidden = false; $('#btn-install-2').hidden = false; };
+diff --git a/js/chat.js b/js/chat.js
+index 15b2253..0bb03c4 100644
+--- a/js/chat.js
+@@ -1,18 +1,24 @@
+-/* Ayomide Studio — chat with built-in assistant (optional external AI provider) */
+-import { $, esc, fmtTime, toast, emit, loadImage, blobToDataURL, shrinkImage, safeMath } from './utils.js';
+-import { addChat, allChat, clearChat, kvGet } from './db.js';
++/* Ayomide Studio — chat: threads, voice input, TTS, streaming AI, local assistant */
++import { $, esc, fmtTime, toast, emit, uid, loadImage, blobToDataURL, shrinkImage, safeMath, speak, stopSpeak } from './utils.js';
++import { addChat, allChat, clearChat, kvGet, kvSet, allThreads, putThread, deleteThread, putChatRow, deleteChatRow } from './db.js';
+ import { exportEverything } from './exporter.js';
+ 
+ let history = [];
+-let attachment = null; // { dataUrl, name }
++let threads = [];
++let threadId = 'default';
++let attachment = null;
+ let busy = false;
++let ttsOn = false;
++let recog = null;
++let listening = false;
++const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+ 
+ const SUGGESTIONS = [
+   '👋 What can you do?',
+   '🎬 Convert an image to video',
+   '✂️ How do I edit an image?',
+   '📦 Export my files',
+-  '📤 How do I upload files?'
++  '🎙 Tell me about voice chat'
+ ];
+ 
+ export async function init() {
+@@ -22,6 +28,24 @@ export async function init() {
+   $('#chat-attach-input').addEventListener('change', onAttachPick);
+   $('#chat-attach-remove').addEventListener('click', () => setAttachment(null));
+ 
++  ttsOn = !!(await kvGet('tts', false));
++  const ttsBtn = $('#chat-tts');
++  ttsBtn.classList.toggle('on', ttsOn);
++  ttsBtn.textContent = ttsOn ? '🔊' : '🔇';
++  ttsBtn.addEventListener('click', async () => {
++    ttsOn = !ttsOn;
++    await kvSet('tts', ttsOn);
++    ttsBtn.classList.toggle('on', ttsOn);
++    ttsBtn.textContent = ttsOn ? '🔊' : '🔇';
++    if (!ttsOn) stopSpeak(); else toast('Replies will now be read aloud 🔊');
++  });
++
++  $('#chat-mic').addEventListener('click', toggleMic);
++
++  $('#btn-new-thread').addEventListener('click', () => newThread());
++  $('#btn-del-thread').addEventListener('click', () => deleteCurrentThread());
++  $('#thread-select').addEventListener('change', (e) => loadThread(e.target.value));
++
+   const sugg = $('#chat-suggest');
+   SUGGESTIONS.forEach((s) => {
+     const b = document.createElement('button');
+@@ -31,11 +55,78 @@ export async function init() {
+     sugg.appendChild(b);
+   });
+ 
+-  history = await allChat();
++  await refreshThreads();
++  const last = await kvGet('lastThread', null);
++  await loadThread(threads.some((t) => t.id === last) ? last : (threads[0]?.id || 'default'));
++}
++
++/* ---------- threads ---------- */
++async function refreshThreads() {
++  threads = await allThreads();
++  if (!threads.length) {
++    await putThread({ id: 'default', title: 'Chat', updatedAt: Date.now() });
++    threads = await allThreads();
++  }
++  const sel = $('#thread-select');
++  sel.innerHTML = '';
++  threads.forEach((t) => {
++    const o = document.createElement('option');
++    o.value = t.id;
++    o.textContent = t.title || 'Chat';
++    sel.appendChild(o);
++  });
++  sel.value = threadId;
++}
++
++async function newThread() {
++  const id = uid();
++  await putThread({ id, title: 'New chat', updatedAt: Date.now() });
++  threadId = id;
++  await refreshThreads();
++  await loadThread(id);
++}
++
++async function deleteCurrentThread() {
++  const t = threads.find((x) => x.id === threadId);
++  if (!await confirm2(`Delete “${t?.title || 'chat'}”?`, 'The whole conversation will be removed from this device.')) return;
++  const rows = await allChat(threadId);
++  for (const r of rows) await deleteChatRow(r.id);
++  await deleteThread(threadId);
++  threads = await allThreads();
++  if (!threads.length) await putThread({ id: 'default', title: 'Chat', updatedAt: Date.now() });
++  threadId = (await allThreads())[0].id;
++  await refreshThreads();
++  await loadThread(threadId);
++  toast('Conversation deleted 🗑');
++}
++
++async function confirm2(title, text) {
++  return new Promise((resolve) => {
++    import('./utils.js').then(({ confirmDialog }) =>
++      confirmDialog(title, text, { danger: true, okLabel: 'Delete' }).then(resolve));
++  });
++}
++
++async function maybeTitleThread(text) {
++  const t = threads.find((x) => x.id === threadId);
++  if (t && (!t.title || t.title === 'Chat' || t.title === 'New chat') && text) {
++    t.title = text.slice(0, 34) + (text.length > 34 ? '…' : '');
++    t.updatedAt = Date.now();
++    await putThread(t);
++    await refreshThreads();
++  }
++}
++
++export async function loadThread(id) {
++  threadId = id;
++  await kvSet('lastThread', id);
++  $('#thread-select').value = id;
++  history = await allChat(id);
++  $('#chat-list').innerHTML = '';
+   if (!history.length) {
+     const welcome = await addChat({
+-      role: 'assistant',
+-      text: "👋 Hi, I'm your Ayomide Studio assistant — I run right here in your browser, even offline.\n\nI can help you chat, upload & manage files, edit images, and turn images into videos. Ask me how, or use the buttons below.",
++      role: 'assistant', threadId: id,
++      text: "👋 Hi, I'm your Ayomide Studio assistant — I run right here in your browser, even offline.\n\nAsk me anything about the app, or try 🎙 voice input (tap the mic). You can also keep several conversations with the ＋ New button.",
+       actions: [
+         { label: '📁 Manage files', act: 'nav:files' },
+         { label: '🎨 Open editor', act: 'nav:editor' },
+@@ -56,16 +147,17 @@ function appendMsg(row) {
+     ? '<div class="avatar user">🧑</div>'
+     : '<div class="avatar">🤖</div>';
+   const img = row.image ? `<img src="${row.image}" alt="attached image">` : '';
+-  const actions = (row.actions || []).map((a, i) =>
+-    `<button data-act="${esc(a.act)}" data-i="${i}">${esc(a.label)}</button>`).join('');
++  const actions = (row.actions || []).map((a) =>
++    `<button data-act="${esc(a.act)}">${esc(a.label)}</button>`).join('');
+   el.innerHTML = `
+     ${avatar}
+     <div>
+-      <div class="bubble">${esc(row.text).replace(/\n/g, '<br>')}${img}
++      <div class="bubble"><span class="txt"></span>${img}
+         ${actions ? `<div class="actions">${actions}</div>` : ''}
+       </div>
+       <div class="meta">${fmtTime(row.ts)}</div>
+     </div>`;
++  el.querySelector('.txt').innerHTML = esc(row.text).replace(/\n/g, '<br>');
+   el.querySelectorAll('.actions button').forEach((b) => {
+     b.addEventListener('click', () => runAction(b.dataset.act));
+   });
+@@ -78,15 +170,60 @@ function scrollBottom() {
+   sc.scrollTop = sc.scrollHeight;
+ }
+ 
+-let typingEl = null;
+-function showTyping() {
+-  typingEl = document.createElement('div');
+-  typingEl.className = 'msg typing';
+-  typingEl.innerHTML = '<div class="avatar">🤖</div><div class="bubble"><span class="dot-b"></span><span class="dot-b"></span><span class="dot-b"></span></div>';
+-  $('#chat-list').appendChild(typingEl);
++/* streaming bubble that we update as text arrives */
++function streamBubble() {
++  const el = document.createElement('div');
++  el.className = 'msg typing';
++  el.innerHTML = '<div class="avatar">🤖</div><div><div class="bubble"><span class="dot-b"></span><span class="dot-b"></span><span class="dot-b"></span></div></div>';
++  $('#chat-list').appendChild(el);
+   scrollBottom();
++  let started = false;
++  return {
++    set(text) {
++      if (!started) {
++        el.classList.remove('typing');
++        el.querySelector('.bubble').innerHTML = '<span class="txt"></span>';
++        started = true;
++      }
++      el.querySelector('.txt').innerHTML = esc(text).replace(/\n/g, '<br>');
++      scrollBottom();
++    }
++  };
++}
++
++/* ---------- voice input ---------- */
++function toggleMic() {
++  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
++  if (!SR) { toast('Voice input is not supported in this browser (try Chrome or Edge).', 'warn', 5000); return; }
++  if (listening) { try { recog.stop(); } catch { } return; }
++  recog = new SR();
++  recog.lang = navigator.language || 'en-US';
++  recog.interimResults = true;
++  recog.continuous = false;
++  let finalText = '';
++  recog.onresult = (e) => {
++    let interim = '';
++    for (let i = e.resultIndex; i < e.results.length; i++) {
++      const r = e.results[i];
++      if (r.isFinal) finalText += r[0].transcript;
++      else interim += r[0].transcript;
++    }
++    $('#chat-input').value = (finalText + interim).trim();
++  };
++  recog.onstart = () => { listening = true; $('#chat-mic').classList.add('listening'); toast('Listening… speak now 🎙'); };
++  recog.onend = () => {
++    listening = false;
++    $('#chat-mic').classList.remove('listening');
++    const text = $('#chat-input').value.trim();
++    if (finalText.trim() && text) send();
++  };
++  recog.onerror = (e) => {
++    listening = false;
++    $('#chat-mic').classList.remove('listening');
++    if (e.error !== 'aborted') toast('Voice error: ' + e.error, 'error');
++  };
++  try { recog.start(); } catch { }
+ }
+-function hideTyping() { typingEl?.remove(); typingEl = null; }
+ 
+ /* ---------- attachments ---------- */
+ async function onAttachPick(e) {
+@@ -107,7 +244,7 @@ function setAttachment(a) {
+   attachment = a;
+   const box = $('#chat-attach-box');
+   if (a) { $('#chat-attach-thumb').src = a.dataUrl; box.hidden = false; }
+-  else { box.hidden = true; }
++  else box.hidden = true;
+ }
+ 
+ /* ---------- send ---------- */
+@@ -119,42 +256,64 @@ async function send() {
+   input.value = '';
+   const img = attachment;
+   setAttachment(null);
++  stopSpeak();
+ 
+-  const userRow = await addChat({ role: 'user', text: text || '📷', image: img?.dataUrl || null });
++  const userRow = await addChat({ role: 'user', threadId, text: text || '📷', image: img?.dataUrl || null });
+   history.push(userRow);
+   appendMsg(userRow);
++  await maybeTitleThread(text);
+   busy = true;
+-  showTyping();
+ 
+-  let reply;
++  const sb = streamBubble();
++  let finalText = '';
++  let actions = null;
+   try {
+-    if (img) reply = await imageReply(img);
+-    else reply = await getReply(text);
++    if (img) {
++      const r = await imageReply(img);
++      finalText = r.text; actions = r.actions || null;
++      await typewriter(finalText, sb.set);
++    } else {
++      const cfg = await kvGet('ai', {});
++      let streamed = false;
++      if (cfg.enabled && cfg.url && cfg.key) {
++        try {
++          finalText = await aiReplyStream(cfg, text, (t) => { streamed = true; sb.set(t); });
++        } catch (err) {
++          toast('AI provider failed — using the local assistant.', 'warn');
++        }
++      }
++      if (!streamed || !finalText) {
++        const r = localReply(text);
++        finalText = r.text; actions = r.actions || null;
++        await typewriter(finalText, sb.set);
++      }
++    }
+   } catch (err) {
+-    reply = { text: '⚠️ ' + err.message };
++    finalText = '⚠️ ' + err.message;
++    sb.set(finalText);
+   }
+-  await new Promise((r) => setTimeout(r, 350 + Math.random() * 450));
+-  hideTyping();
+-  const row = await addChat({ role: 'assistant', text: reply.text, actions: reply.actions || null });
++
++  const row = await addChat({ role: 'assistant', threadId, text: finalText, actions });
+   history.push(row);
++  sb.set(''); // clear placeholder element
++  const last = $('#chat-list').lastChild;
++  if (last?.classList.contains('typing')) last.remove();
+   appendMsg(row);
++  if (ttsOn) speak(finalText);
+   busy = false;
+ }
+ 
+-/* ---------- external AI provider ---------- */
+-async function getReply(text) {
+-  const cfg = await kvGet('ai', {});
+-  if (cfg.enabled && cfg.url && cfg.key) {
+-    try {
+-      return { text: await aiReply(cfg, text) };
+-    } catch (err) {
+-      toast('AI provider failed — falling back to the local assistant.', 'warn');
+-    }
++async function typewriter(text, set) {
++  const step = Math.max(1, Math.round(text.length / 140));
++  for (let i = step; i < text.length; i += step) {
++    set(text.slice(0, i));
++    await sleep(12);
+   }
+-  return localReply(text);
++  set(text);
+ }
+ 
+-async function aiReply(cfg, text) {
++/* ---------- external AI provider (streaming) ---------- */
++async function aiReplyStream(cfg, text, onDelta) {
+   const msgs = history.slice(0, -1).slice(-12).map((r) => ({
+     role: r.role === 'user' ? 'user' : 'assistant',
+     content: (r.image ? '[image attached] ' : '') + r.text
+@@ -164,16 +323,38 @@ async function aiReply(cfg, text) {
+     role: 'system',
+     content: 'You are Ayomide Assistant inside "Ayomide Studio", a PWA for chatting, file management, image editing and image-to-video conversion. Be concise, friendly and helpful. All user files stay on their device.'
+   });
++
+   const res = await fetch(cfg.url.replace(/\/+$/, '') + '/chat/completions', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+-    body: JSON.stringify({ model: cfg.model || 'gpt-4o-mini', messages: msgs, stream: false })
++    body: JSON.stringify({ model: cfg.model || 'gpt-4o-mini', messages: msgs, stream: true })
+   });
+   if (!res.ok) throw new Error(`Provider error ${res.status}`);
+-  const data = await res.json();
+-  const out = data.choices?.[0]?.message?.content;
+-  if (!out) throw new Error('Empty response from provider');
+-  return String(out).trim();
++  if (!res.body) throw new Error('Streaming not supported by provider');
++
++  const reader = res.body.getReader();
++  const dec = new TextDecoder();
++  let full = '', buf = '';
++  while (true) {
++    const { done, value } = await reader.read();
++    if (done) break;
++    buf += dec.decode(value, { stream: true });
++    const lines = buf.split('\n');
++    buf = lines.pop();
++    for (const line of lines) {
++      const s = line.trim();
++      if (!s.startsWith('data:')) continue;
++      const payload = s.slice(5).trim();
++      if (payload === '[DONE]') continue;
++      try {
++        const j = JSON.parse(payload);
++        const d = j.choices?.[0]?.delta?.content || '';
++        if (d) { full += d; onDelta(full); }
++      } catch { /* partial json */ }
++    }
++  }
++  if (!full.trim()) throw new Error('Empty response from provider');
++  return full.trim();
+ }
+ 
+ export async function testAI(cfg) {
+@@ -222,29 +403,77 @@ function localReply(raw) {
+   const navMatch = text.match(/open (the )?(chat|files?|editor|video|settings)\b/);
+   if (navMatch) {
+     const map = { chat: 'chat', file: 'files', files: 'files', editor: 'editor', video: 'video', settings: 'settings' };
+-    const tab = map[navMatch[2]];
+-    return { text: `Opening ${navMatch[2]} for you… ✅`, actions: [{ label: `Go to ${navMatch[2]}`, act: 'nav:' + tab }] };
++    return { text: `Opening ${navMatch[2]} for you… ✅`, actions: [{ label: `Go to ${navMatch[2]}`, act: 'nav:' + map[navMatch[2]] }] };
+   }
+ 
+   const R = [
++    {
++      re: /voice|speak|microphone|talk to you|say it/,
++      reply: () => ({
++        text: "🎙 Voice mode: tap the mic button next to the message box and just talk — I'll type it out and send automatically.\n\nWant me to answer out loud too? Tap the 🔊 button and I'll read every reply to you.",
++        actions: []
++      })
++    },
++    {
++      re: /thread|conversation|new chat|multiple chats/,
++      reply: () => ({
++        text: "🔗 You can keep as many conversations as you like: tap “＋ New” above the chat to start a fresh thread, and use the dropdown to switch between them. Each thread remembers its full history.",
++        actions: []
++      })
++    },
++    {
++      re: /sync|cloud|another (device|phone|laptop)|backup online/,
++      reply: () => ({
++        text: "☁️ Cloud sync: go to Settings → Cloud sync, sign in to your own sync server (there's a free one-click deploy for Render in the README), and tap “Sync now”. Your files and chats stay identical across your devices.",
++        actions: [{ label: '⚙️ Open Settings', act: 'nav:settings' }]
++      })
++    },
++    {
++      re: /vault|encrypt|private|hide/,
++      reply: () => ({
++        text: "🔒 The Vault: enable app lock in Settings first (PIN, optionally fingerprint). Then any file's card gets a 🔒 button — tapping it moves the file into the Vault, encrypted with AES-256. Without your PIN it's just noise.",
++        actions: [{ label: '⚙️ Set up in Settings', act: 'nav:settings' }]
++      })
++    },
++    {
++      re: /music|audio|song|sound/,
++      reply: () => ({
++        text: "🎵 Add music to your videos: in Image → Video, scroll to the Music section, pick an audio file (from Files or upload), set the volume, and render. The track is mixed into the exported video file.",
++        actions: [{ label: '🎬 Open Image → Video', act: 'nav:video' }]
++      })
++    },
++    {
++      re: /watermark|copyright|logo on/,
++      reply: () => ({
++        text: "💧 Watermarks: open an image in the Editor and scroll to the Watermark section — your text, position (9 spots), colour, size and opacity. It's baked into every export (Save or Download).",
++        actions: [{ label: '🎨 Open Editor', act: 'nav:editor' }]
++      })
++    },
++    {
++      re: /draw|annotate|arrow|sticker|pixelate|blur.*hide|hide.*part/,
++      reply: () => ({
++        text: "✍️ In the Editor's Tools section you can: paint with a brush, add arrows & rectangles, place text and emoji stickers, and pixelate areas (perfect for hiding faces or sensitive info). Undo/redo works on every mark.",
++        actions: [{ label: '🎨 Open Editor', act: 'nav:editor' }]
++      })
++    },
+     {
+       re: /((image|photo|picture|pic)[^.]*?(video|reel|slideshow|mp4))|((video|reel)[^.]*?(image|photo|picture))|convert[^.]*(video)|turn[^.]*(video)|image to video|photo to video|make (a |me )?video/,
+       reply: () => ({
+-        text: "🎬 Easy! The Image → Video tab turns your images into a real video file:\n\n1. Go to Image → Video (or tap the button below)\n2. Pick one or more images — from Files or upload\n3. Choose duration, motion (zoom/pan), resolution (landscape, square or Reels) and fades\n4. Tap 🎬 Render video, then save it to Files or download it\n\nA single image works great with the 'Zoom in' effect for an animated background or loop.",
++        text: "🎬 Easy! The Image → Video tab turns your images into a real video file:\n\n1. Go to Image → Video (button below)\n2. Pick one or more images, add a music track if you like\n3. Choose duration, motion (zoom/pan), resolution (landscape, square or Reels) and fades\n4. Tap 🎬 Render video, then save it to Files or download it",
+         actions: [{ label: '🎬 Open Image → Video', act: 'nav:video' }]
+       })
+     },
+     {
+-      re: /how.{0,20}edit|edit(or)?[^.]*(image|photo|picture)|crop|rotate|flip|filter|resize|brighten/,
++      re: /how.{0,20}edit|edit(or)?[^.]*(image|photo|picture)|crop|rotate|flip|filter|resize|brighten|enhance/,
+       reply: () => ({
+-        text: "🎨 The Editor has you covered:\n\n• Rotate ⟲ ⟳ and flip ⇋ ⇵\n• Crop — drag a box on the image\n• Resize with locked aspect ratio\n• Filters: brightness, contrast, saturation, hue, blur, grayscale, sepia + one-tap presets\n• Undo/redo history\n• Export as PNG, JPEG or WebP — save to Files or download",
++        text: "🎨 The Editor covers it all:\n\n• ✨ Auto-enhance (one tap)\n• Rotate ⟲ ⟳, flip ⇋ ⇵, crop with ratio presets (1:1, 4:5, 16:9, 9:16…)\n• Resize with locked aspect ratio\n• 7 filter sliders + presets, undo/redo\n• Draw, arrows, text, emoji stickers, pixelate\n• Watermark, then export PNG/JPEG/WebP",
+         actions: [{ label: '🎨 Open Editor', act: 'nav:editor' }]
+       })
+     },
+     {
+       re: /export|download|backup|zip|save (all|my|everything)/,
+       reply: () => ({
+-        text: "📦 Two ways to export:\n\n• Export a single file — open the Files tab and tap ⬇️ on any file\n• Export everything — Files → “Export all (.zip)” bundles every stored file plus your chat history into one ZIP",
++        text: "📦 Export options:\n\n• Single file — Files tab → ⬇️ on any card\n• Everything — Files → “Export all (.zip)” (files + chat history)\n• Import back — the 🧳 button restores any backup ZIP on any device\n\nTip:ZIP backups work across devices, and cloud sync keeps everything live.",
+         actions: [
+           { label: '📦 Export everything now', act: 'op:export' },
+           { label: '📁 Open Files', act: 'nav:files' }
+@@ -252,9 +481,9 @@ function localReply(raw) {
+       })
+     },
+     {
+-      re: /upload|add (a )?file|import|attach/,
++      re: /upload|add (a )?file|import|attach|share (sheet|into)|send (files? )?here/,
+       reply: () => ({
+-        text: "📤 To upload files:\n\nGo to the Files tab and either drag & drop files anywhere on the drop zone, or click “Choose files”. Images, videos, audio, documents — anything goes. Everything is stored safely on your device, not in the cloud.",
++        text: "📤 To get files in:\n\n• Drag & drop or “Choose files” in the Files tab\n• On Android/Chrome you can share images from other apps straight to Ayomide Studio (it appears in the share sheet)\n• Organize with folders 📁 and tags, find duplicates with ♻️",
+         actions: [
+           { label: '📤 Upload a file', act: 'op:upload' },
+           { label: '📁 Open Files', act: 'nav:files' }
+@@ -264,25 +493,25 @@ function localReply(raw) {
+     {
+       re: /install|pwa|home screen|offline|add to (home|device)/,
+       reply: () => ({
+-        text: "📲 Ayomide Studio is a Progressive Web App — it installs like a native app and works offline:\n\n• Chrome/Edge (desktop): click the install icon in the address bar, or the “Install app” button in the sidebar\n• Android: menu ⋮ → “Add to Home screen” / “Install app”\n• iPhone/iPad (Safari): Share → “Add to Home Screen”\n\nOnce installed it opens in its own window with no browser bar."
++        text: "📲 Ayomide Studio is a Progressive Web App — install it and it works offline:\n\n• Chrome/Edge (desktop): install icon in the address bar, or “Install app” in the sidebar\n• Android: menu ⋮ → Add to Home screen / Install app\n• iPhone/iPad (Safari): Share → Add to Home Screen"
+       })
+     },
+     {
+       re: /(who are you|your name|what are you|about you)/,
+       reply: () => ({
+-        text: "I'm the Ayomide Studio assistant 🤖 — a built-in helper that runs 100% in your browser (no server, no account, works offline). I can guide you through chatting, file management, image editing, image-to-video, and exporting.\n\nTip: in Settings you can connect your own OpenAI-compatible API key to make me a full AI chatbot."
++        text: "I'm the Ayomide Studio assistant 🤖 — a built-in helper that runs 100% in your browser (no server, no account, works offline). I can guide you through chatting (voice too!), file management, editing, image-to-video, exporting and sync.\n\nTip: connect your own OpenAI-compatible API in Settings and I become a full streaming AI chatbot."
+       })
+     },
+     {
+       re: /privacy|my data|cloud|server|safe/,
+       reply: () => ({
+-        text: "🔒 Your privacy is the whole design: files and chat history live in your browser's local storage on this device only. Nothing is uploaded to any server — the app itself even works offline. If you connect an external AI provider in Settings, only chat messages you send are sent to that provider."
++        text: "🔒 Privacy by design: files and chats live in your browser's storage on this device. Nothing is uploaded unless you personally enable Cloud sync or connect an AI provider — and then only you have the credentials. Vault files are AES-256 encrypted at rest."
+       })
+     },
+     {
+       re: /help|what can you do|features|capab|guide|how (do|to) (i )?use/,
+       reply: () => ({
+-        text: "Here's what Ayomide Studio can do 👇\n\n💬 Chat — talk to me right here, attach images, get help anytime\n📁 Files — upload (drag & drop), preview, rename, edit, delete, download\n🎨 Editor — crop, rotate, flip, resize, filters, export PNG/JPEG/WebP\n🎬 Image → Video — turn images into video with zoom/pan motion & fades\n📦 Export — download any file or everything as a ZIP\n\nEverything works offline and stays on your device.",
++        text: "Here's everything 👇\n\n💬 Chat — voice input 🎙, spoken replies 🔊, multiple threads\n📁 Files — folders, tags, gallery view, duplicate finder, ZIP import/export, encrypted Vault 🔒\n🎨 Editor — auto-enhance, crop presets, filters, draw/annotate, watermark\n🎬 Image → Video — motion, fades, music 🎵, text titles\n☁️ Sync — your files & chats on every device\n📦 Export — any file, or everything as ZIP\n\nAll offline-capable, on your device.",
+         actions: [
+           { label: '📁 Files', act: 'nav:files' },
+           { label: '🎨 Editor', act: 'nav:editor' },
+@@ -293,7 +522,7 @@ function localReply(raw) {
+     {
+       re: /clear|delete|wipe|reset/,
+       reply: () => ({
+-        text: "🧹 I can clear things for you:\n\n• Clear the chat history — Settings → “Clear chat history”\n• Delete files — Files tab → ✕ on a card, or Settings → “Delete all files”\n\nWant me to take you there?",
++        text: "🧹 I can clear things:\n\n• This conversation — the 🗑 button above the chat\n• All chat history — Settings → Clear chat history\n• Files — the ✕ on any card, bulk-select, or Settings → Delete all files",
+         actions: [{ label: '⚙️ Open Settings', act: 'nav:settings' }]
+       })
+     },
+@@ -326,12 +555,12 @@ function localReply(raw) {
+     },
+     {
+       re: /thank|thanks|thx|appreciate/,
+-      reply: () => ({ text: "You're very welcome! 😊 Anything else — editing, a video, exporting files — just say the word." })
++      reply: () => ({ text: "You're very welcome! 😊 Anything else — editing, a video with music, exporting — just say the word (or tap 🎙 and say it out loud)." })
+     },
+     {
+       re: /(api|key|openai|groq|openrouter|ollama|connect).{0,40}(ai|model|chat)?|real ai|chatgpt|gpt/,
+       reply: () => ({
+-        text: "🔌 Want a full AI chatbot? Head to Settings → “AI chat provider” and connect any OpenAI-compatible API (OpenAI, Groq, OpenRouter, local Ollama…):\n\n1. Tick “Use external AI provider”\n2. Enter the Base URL, API key and model name\n3. Save, then “Test connection”\n\nUntil then I'll keep answering locally — your key is stored only on this device.",
++        text: "🔌 Want a full AI chatbot? Settings → AI chat provider — connect any OpenAI-compatible API (OpenAI, Groq, OpenRouter, local Ollama…). Replies then stream in live. Until then, I'll keep answering locally — your key is stored only on this device.",
+         actions: [{ label: '⚙️ Open Settings', act: 'nav:settings' }]
+       })
+     }
+@@ -342,7 +571,7 @@ function localReply(raw) {
+   }
+ 
+   return {
+-    text: "I'm mostly built for helping you run this studio 😄 — but try me on:\n\n• “How do I turn an image into a video?”\n• “How do I edit / crop an image?”\n• “Export my files”\n• “How do I upload?”\n• “Install this app”\n\nOr connect your own AI provider in Settings and I become a full chatbot.",
++    text: "I'm mostly built for helping you run this studio 😄 — but try me on:\n\n• “Convert an image into a video with music”\n• “How do I edit / crop an image?”\n• “What's the vault?” · “Set up sync”\n• “Export my files” · “Tell me a joke”\n\nOr connect your own AI provider in Settings and I become a full chatbot.",
+     actions: [
+       { label: '🎬 Video', act: 'nav:video' },
+       { label: '🎨 Editor', act: 'nav:editor' },
+@@ -353,35 +582,22 @@ function localReply(raw) {
+ 
+ /* ---------- message action buttons ---------- */
+ export async function resetChat() {
+-  history = [];
+-  $('#chat-list').innerHTML = '';
+-  const hello = await addChat({
+-    role: 'assistant',
+-    text: 'Chat cleared. 🧹 Fresh start — what would you like to do?',
+-    actions: [
+-      { label: '📁 Files', act: 'nav:files' },
+-      { label: '🎨 Editor', act: 'nav:editor' },
+-      { label: '🎬 Video', act: 'nav:video' }
+-    ]
+-  });
+-  history.push(hello);
+-  appendMsg(hello);
++  await clearChat();
++  await deleteThread(threadId).catch(() => { });
++  await putThread({ id: threadId, title: 'Chat', updatedAt: Date.now() });
++  await loadThread(threadId);
+ }
++
+ async function runAction(act) {
+   if (act.startsWith('nav:')) emit('nav', act.slice(4));
+   else if (act === 'op:upload') { emit('nav', 'files'); setTimeout(() => emit('op', 'upload'), 80); }
+   else if (act === 'op:export') exportEverything();
+   else if (act === 'op:clear') {
+-    if (await confirmDialog('Clear chat?', 'This deletes the entire chat history from this device.', { danger: true, okLabel: 'Clear' })) {
+-      await clearChat();
+-      history = [];
+-      $('#chat-list').innerHTML = '';
+-      const welcome = await addChat({
+-        role: 'assistant',
+-        text: 'Chat cleared. 🧹 Fresh start — what would you like to do?'
+-      });
+-      history.push(welcome);
+-      appendMsg(welcome);
++    const { confirmDialog } = await import('./utils.js');
++    if (await confirmDialog('Clear chat?', 'This deletes the conversation history from this device.', { danger: true, okLabel: 'Clear' })) {
++      await resetChat();
+     }
+   }
+ }
++
++export { putChatRow };
+diff --git a/js/db.js b/js/db.js
+index 51847a6..3a5ed3a 100644
+--- a/js/db.js
+@@ -1,8 +1,8 @@
+-/* Ayomide Studio — IndexedDB layer (files, chat, settings) */
++/* Ayomide Studio — IndexedDB layer (files, chat, threads, settings, share-in queue) */
+ import { uid } from './utils.js';
+ 
+ const DB_NAME = 'ayomide-studio';
+-const DB_VERSION = 1;
++const DB_VERSION = 2;
+ let _db = null;
+ 
+ function db() {
+@@ -11,9 +11,38 @@ function db() {
+     const req = indexedDB.open(DB_NAME, DB_VERSION);
+     req.onupgradeneeded = () => {
+       const d = req.result;
++      const v = req.transaction;
+       if (!d.objectStoreNames.contains('files')) d.createObjectStore('files', { keyPath: 'id' });
+       if (!d.objectStoreNames.contains('chat')) d.createObjectStore('chat', { keyPath: 'id' });
+       if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv', { keyPath: 'key' });
++      if (!d.objectStoreNames.contains('threads')) d.createObjectStore('threads', { keyPath: 'id' });
++      if (!d.objectStoreNames.contains('share-in')) d.createObjectStore('share-in', { keyPath: 'id' });
++      // indexes
++      const files = v.objectStore('files');
++      if (!files.indexNames.contains('folder')) files.createIndex('folder', 'folder');
++      const chat = v.objectStore('chat');
++      if (!chat.indexNames.contains('threadId')) chat.createIndex('threadId', 'threadId');
++      // migrate v1 rows
++      if (req.result.version > 1 || true) {
++        const cr = v.objectStore('chat').openCursor();
++        cr.onsuccess = () => {
++          const c = cr.result;
++          if (!c) return;
++          const row = c.value;
++          if (!row.threadId) { row.threadId = 'default'; c.update(row); }
++          c.continue();
++        };
++        const fr = v.objectStore('files').openCursor();
++        fr.onsuccess = () => {
++          const c = fr.result;
++          if (!c) return;
++          const row = c.value;
++          if (!row.folder) row.folder = 'root';
++          if (!row.tags) row.tags = [];
++          c.update(row);
++        };
++        v.objectStore('threads').put({ id: 'default', title: 'Chat', updatedAt: Date.now() });
++      }
+     };
+     req.onsuccess = () => { _db = req.result; res(_db); };
+     req.onerror = () => rej(req.error);
+@@ -24,8 +53,8 @@ function tx(store, mode, fn) {
+   return db().then((d) => new Promise((res, rej) => {
+     const t = d.transaction(store, mode);
+     const s = t.objectStore(store);
+-    const out = fn(s);
+-    t.oncomplete = () => res(out && out._v !== undefined ? out._v : out);
++    fn(s);
++    t.oncomplete = () => res();
+     t.onerror = () => rej(t.error);
+   }));
+ }
+@@ -34,70 +63,96 @@ function reqToPromise(r) {
+   return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+ }
+ 
++function store(storeName) {
++  return db().then((d) => d.transaction(storeName).objectStore(storeName));
++}
++
+ /* ---------- files ---------- */
+ export async function addFile(blob, name, meta = {}) {
+   const rec = {
+-    id: uid(),
++    id: meta.id || uid(),
+     name: name || 'file',
+     type: blob.type || meta.type || '',
+     size: blob.size,
+     addedAt: Date.now(),
++    updated: Date.now(),
++    folder: meta.folder || 'root',
++    tags: meta.tags || [],
++    hash: meta.hash || null,
++    vault: false,
++    iv: null,
+     blob,
+-    ...meta
++    ...meta,
++    blob, // ensure blob always the given blob (meta cannot override)
++    size: blob.size
+   };
+   await tx('files', 'readwrite', (s) => s.put(rec));
+   return rec;
+ }
+ 
+-export async function getFile(id) {
+-  return db().then((d) => reqToPromise(d.transaction('files').objectStore('files').get(id)));
++export async function putFileRec(rec) {
++  await tx('files', 'readwrite', (s) => s.put(rec));
+ }
+ 
++export const getFile = (id) => store('files').then((s) => reqToPromise(s.get(id)));
++
+ export async function allFiles() {
+-  return db().then((d) => reqToPromise(d.transaction('files').objectStore('files').getAll()))
++  return store('files').then((s) => reqToPromise(s.getAll()))
+     .then((rows) => (rows || []).sort((a, b) => b.addedAt - a.addedAt));
+ }
+ 
+ export async function updateFile(id, patch) {
+   const rec = await getFile(id);
+   if (!rec) return null;
+-  Object.assign(rec, patch);
++  Object.assign(rec, patch, { updated: Date.now() });
+   await tx('files', 'readwrite', (s) => s.put(rec));
+   return rec;
+ }
+ 
+-export async function deleteFile(id) {
+-  await tx('files', 'readwrite', (s) => s.delete(id));
+-}
++export const deleteFile = (id) => tx('files', 'readwrite', (s) => s.delete(id));
++export const clearFiles = () => tx('files', 'readwrite', (s) => s.clear());
+ 
+-export async function clearFiles() {
+-  await tx('files', 'readwrite', (s) => s.clear());
++/* ---------- threads ---------- */
++export async function allThreads() {
++  return store('threads').then((s) => reqToPromise(s.getAll()))
++    .then((rows) => (rows || []).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)));
+ }
++export const putThread = (t) => tx('threads', 'readwrite', (s) => s.put(t));
++export const getThread = (id) => store('threads').then((s) => reqToPromise(s.get(id)));
++export const deleteThread = (id) => tx('threads', 'readwrite', (s) => s.delete(id));
+ 
+ /* ---------- chat ---------- */
+ export async function addChat(msg) {
+-  const row = { id: uid(), ts: Date.now(), ...msg };
++  const row = { id: msg.id || uid(), ts: Date.now(), threadId: msg.threadId || 'default', ...msg };
+   await tx('chat', 'readwrite', (s) => s.put(row));
++  const t = await getThread(row.threadId);
++  await putThread({ id: row.threadId, title: t?.title || 'Chat', updatedAt: Date.now() });
+   return row;
+ }
+-
+-export async function allChat() {
+-  return db().then((d) => reqToPromise(d.transaction('chat').objectStore('chat').getAll()))
++export const putChatRow = (row) => tx('chat', 'readwrite', (s) => s.put(row));
++export const allChat = (threadId = null) => {
++  if (threadId === null) {
++    return store('chat').then((s) => reqToPromise(s.getAll()))
++      .then((rows) => (rows || []).sort((a, b) => a.ts - b.ts));
++  }
++  return store('chat').then((s) => reqToPromise(s.index('threadId').getAll(threadId)))
+     .then((rows) => (rows || []).sort((a, b) => a.ts - b.ts));
+-}
+-
+-export async function clearChat() {
+-  await tx('chat', 'readwrite', (s) => s.clear());
+-}
++};
++export const clearChat = () => tx('chat', 'readwrite', (s) => s.clear());
++export const deleteChatRow = (id) => tx('chat', 'readwrite', (s) => s.delete(id));
+ 
+ /* ---------- kv settings ---------- */
+ export async function kvGet(key, def = null) {
+-  const row = await db().then((d) => reqToPromise(d.transaction('kv').objectStore('kv').get(key)));
++  const row = await store('kv').then((s) => reqToPromise(s.get(key)));
+   return row ? row.value : def;
+ }
++export const kvSet = (key, value) => tx('kv', 'readwrite', (s) => s.put({ key, value }));
+ 
+-export async function kvSet(key, value) {
+-  await tx('kv', 'readwrite', (s) => s.put({ key, value }));
++/* ---------- share-in queue (written by service worker) ---------- */
++export async function drainShareIn() {
++  const rows = await store('share-in').then((s) => reqToPromise(s.getAll()));
++  if (rows?.length) await tx('share-in', 'readwrite', (s) => s.clear());
++  return rows || [];
+ }
+ 
+ /* ---------- storage estimate ---------- */
+diff --git a/js/editor.js b/js/editor.js
+index 1a2d034..96caff6 100644
+--- a/js/editor.js
+@@ -1,4 +1,4 @@
+-/* Ayomide Studio — image editor (rotate/flip/crop/resize/filters, undo-redo, export) */
++/* Ayomide Studio — image editor: crop, filters, draw/annotate, watermark, auto-enhance */
+ import { $, $$, toast, download, loadImage, emit } from './utils.js';
+ import { addFile, getFile } from './db.js';
+ import { pickImages, refresh as refreshFiles } from './files.js';
+@@ -18,18 +18,30 @@ const PRESETS = {
+   'Sepia': { sepia: 75 }, 'Cool': { hue: 16, saturate: 120 }, 'Warm': { sepia: 28, saturate: 125, brightness: 105 }
+ };
+ 
+-let st = null;           // editor state
++const EMOJIS = ['😀', '😂', '😍', '🥳', '😎', '🤔', '👍', '🙌', '🔥', '💖', '✨', '🎉', '⭐', '💯', '🇳🇬', '💰',
++  '📸', '🎬', '🎵', '🍕', '☕', '🌸', '🌈', '⚡', '❤️', '👀', '🙏', '💪', '🤝', '🚀', '🏆', '🎯',
++  '📌', '💬', '✅', '❌', '🌟', '🎊', '☀️', '🌙', '💧', '🦋', ' 🎁', '🏆', '⚠️', 'ℹ️'];
++
++let st = null;
+ let history = [];
+ let hIndex = -1;
+ let cropping = false;
+-let cropSel = null;      // live selection in canvas px
++let cropSel = null;
+ let origName = 'image';
+ 
++let tool = 'none';
++let drawing = null;
++let pendingEmoji = null;
++
+ const canvas = () => $('#editor-canvas');
++const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+ 
+ export async function init() {
+   buildFilterControls();
+   buildPresets();
++  buildEmojiPalette();
++  bindTools();
++  bindWatermark();
+ 
+   $('#ed-pick').addEventListener('click', async () => {
+     const recs = await pickImages({ multiple: false, title: 'Choose an image to edit' });
+@@ -46,6 +58,7 @@ export async function init() {
+   $('#ed-rot-r').addEventListener('click', () => mutate({ rotation: (state().rotation + 90) % 360 }));
+   $('#ed-flip-h').addEventListener('click', () => mutate({ flipH: !state().flipH }));
+   $('#ed-flip-v').addEventListener('click', () => mutate({ flipV: !state().flipV }));
++  $('#ed-auto').addEventListener('click', autoEnhance);
+ 
+   $('#ed-crop-start').addEventListener('click', startCrop);
+   $('#ed-crop-cancel').addEventListener('click', endCrop);
+@@ -58,18 +71,17 @@ export async function init() {
+   });
+   $('#ed-w').addEventListener('input', () => {
+     if (!$('#ed-lock').checked || !st) return;
+-    const ratio = outDims().h / outDims().w;
+     const w = parseInt($('#ed-w').value, 10);
+-    if (w > 0) $('#ed-h').value = Math.round(w * ratio);
++    if (w > 0) $('#ed-h').value = Math.round(w * outDims().h / outDims().w);
+   });
+   $('#ed-h').addEventListener('input', () => {
+     if (!$('#ed-lock').checked || !st) return;
+-    const ratio = outDims().w / outDims().h;
+     const h = parseInt($('#ed-h').value, 10);
+-    if (h > 0) $('#ed-w').value = Math.round(h * ratio);
++    if (h > 0) $('#ed-w').value = Math.round(h * outDims().w / outDims().h);
+   });
+ 
+   $('#ed-reset-filters').addEventListener('click', () => mutate({ filters: defaultFilters() }));
++  $('#ed-clear-marks').addEventListener('click', () => { if (st?.annotations?.length) mutate({ annotations: [] }); });
+ 
+   $('#ed-save').addEventListener('click', saveToFiles);
+   $('#ed-download').addEventListener('click', doDownload);
+@@ -84,6 +96,9 @@ function defaultFilters() {
+   FILTERS.forEach((f) => o[f.key] = f.def);
+   return o;
+ }
++function defaultWatermark() {
++  return { on: false, text: '', pos: 'br', color: '#ffffff', size: 26, opacity: 55 };
++}
+ 
+ /* ---------- loading ---------- */
+ export async function loadFileId(id) {
+@@ -98,7 +113,8 @@ export async function loadBlob(blob, name) {
+     const img = await loadImage(url);
+     st = {
+       img, name: name || 'image', rotation: 0, flipH: false, flipV: false,
+-      crop: null, filters: defaultFilters(), scaleTo: null
++      crop: null, filters: defaultFilters(), scaleTo: null,
++      annotations: [], watermark: defaultWatermark()
+     };
+     origName = st.name;
+     history = [snapshot()];
+@@ -106,6 +122,7 @@ export async function loadBlob(blob, name) {
+     showStage(true);
+     render();
+     syncFilterInputs();
++    syncWatermarkInputs();
+     toast(`Loaded “${st.name}” 🎨`, 'ok');
+   } catch {
+     toast('Could not load that image.', 'error');
+@@ -117,7 +134,7 @@ export async function loadBlob(blob, name) {
+ function snapshot() {
+   return JSON.parse(JSON.stringify({
+     rotation: st.rotation, flipH: st.flipH, flipV: st.flipV, crop: st.crop,
+-    filters: st.filters, scaleTo: st.scaleTo
++    filters: st.filters, scaleTo: st.scaleTo, annotations: st.annotations, watermark: st.watermark
+   }));
+ }
+ 
+@@ -126,7 +143,7 @@ function mutate(patch) {
+   Object.assign(st, patch);
+   history = history.slice(0, hIndex + 1);
+   history.push(snapshot());
+-  if (history.length > 30) history.shift();
++  if (history.length > 40) history.shift();
+   hIndex = history.length - 1;
+   render();
+   syncFilterInputs();
+@@ -136,16 +153,11 @@ function restore(snap) {
+   Object.assign(st, JSON.parse(JSON.stringify(snap)));
+   render();
+   syncFilterInputs();
++  syncWatermarkInputs();
+ }
+ 
+-function undo() {
+-  if (!st || hIndex <= 0) return;
+-  restore(history[--hIndex]);
+-}
+-function redo() {
+-  if (!st || hIndex >= history.length - 1) return;
+-  restore(history[++hIndex]);
+-}
++function undo() { if (st && hIndex > 0) restore(history[--hIndex]); }
++function redo() { if (st && hIndex >= 0 && hIndex < history.length - 1) restore(history[++hIndex]); }
+ 
+ /* ---------- geometry ---------- */
+ function geoDims() {
+@@ -162,12 +174,11 @@ function outDims() {
+ }
+ 
+ function filterString() {
+-  if (!('filter' in canvas().getContext('2d'))) return '';
++  if (!st.filters) return '';
+   const f = st.filters;
+   return `brightness(${f.brightness}%) contrast(${f.contrast}%) saturate(${f.saturate}%) hue-rotate(${f.hue}deg) blur(${f.blur}px) grayscale(${f.grayscale}%) sepia(${f.sepia}%)`;
+ }
+ 
+-/* Draw source (with crop/rotation/flip) into target ctx at given size */
+ function drawGeometry(ctx, w, h) {
+   const img = st.img;
+   const sx = st.crop ? st.crop.x : 0;
+@@ -182,6 +193,78 @@ function drawGeometry(ctx, w, h) {
+   ctx.restore();
+ }
+ 
++/* ---------- annotations ---------- */
++function drawAnnotations(ctx, list) {
++  for (const a of list || []) {
++    ctx.save();
++    if (a.type === 'brush') {
++      ctx.strokeStyle = a.color; ctx.lineWidth = a.size;
++      ctx.lineJoin = ctx.lineCap = 'round';
++      ctx.beginPath();
++      a.pts.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
++      ctx.stroke();
++    } else if (a.type === 'arrow') {
++      const { x1, y1, x2, y2 } = a;
++      ctx.strokeStyle = a.color; ctx.fillStyle = a.color; ctx.lineWidth = a.size;
++      ctx.lineCap = 'round';
++      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
++      const ang = Math.atan2(y2 - y1, x2 - x1);
++      const head = Math.max(10, a.size * 3);
++      ctx.beginPath();
++      ctx.moveTo(x2, y2);
++      ctx.lineTo(x2 - head * Math.cos(ang - Math.PI / 6), y2 - head * Math.sin(ang - Math.PI / 6));
++      ctx.lineTo(x2 - head * Math.cos(ang + Math.PI / 6), y2 - head * Math.sin(ang + Math.PI / 6));
++      ctx.closePath(); ctx.fill();
++    } else if (a.type === 'rect') {
++      ctx.strokeStyle = a.color; ctx.lineWidth = a.size;
++      ctx.strokeRect(Math.min(a.x1, a.x2), Math.min(a.y1, a.y2), Math.abs(a.x2 - a.x1), Math.abs(a.y2 - a.y1));
++    } else if (a.type === 'text') {
++      ctx.font = `700 ${a.size * 4.5}px -apple-system, "Segoe UI", Roboto, sans-serif`;
++      ctx.fillStyle = a.color;
++      ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = a.size;
++      ctx.textBaseline = 'top';
++      ctx.fillText(a.text, a.x, a.y);
++    } else if (a.type === 'emoji') {
++      ctx.font = `${a.size * 3.2}px -apple-system, "Segoe UI", Roboto, "Noto Color Emoji", sans-serif`;
++      ctx.textBaseline = 'middle'; ctx.textAlign = 'center';
++      ctx.fillText(a.ch, a.x, a.y);
++    } else if (a.type === 'pixel') {
++      const x = Math.min(a.x1, a.x2), y = Math.min(a.y1, a.y2);
++      const w = Math.abs(a.x2 - a.x1), h = Math.abs(a.y2 - a.y1);
++      if (w < 4 || h < 4) { ctx.restore(); continue; }
++      const bw = Math.max(3, Math.round(w / 26));
++      const bh = Math.max(3, Math.round(h / 26));
++      const t = document.createElement('canvas');
++      t.width = bw; t.height = bh;
++      const tctx = t.getContext('2d');
++      tctx.drawImage(ctx.canvas, x, y, w, h, 0, 0, bw, bh);
++      ctx.imageSmoothingEnabled = false;
++      ctx.drawImage(t, 0, 0, bw, bh, x, y, w, h);
++      ctx.imageSmoothingEnabled = true;
++    }
++    ctx.restore();
++  }
++}
++
++function drawWatermark(ctx, W, H) {
++  const wm = st.watermark;
++  if (!wm || !wm.on || !wm.text || !wm.text.trim()) return;
++  const fs = Math.round(wm.size * (H / 1080) * 1.8);
++  const pad = Math.round(Math.min(W, H) * 0.045);
++  ctx.save();
++  ctx.globalAlpha = wm.opacity / 100;
++  ctx.font = `600 ${fs}px -apple-system, "Segoe UI", Roboto, sans-serif`;
++  ctx.fillStyle = wm.color;
++  ctx.shadowColor = 'rgba(0,0,0,.45)';
++  ctx.shadowBlur = fs * 0.25;
++  ctx.textAlign = wm.pos[1] === 'l' ? 'left' : wm.pos[1] === 'r' ? 'right' : 'center';
++  ctx.textBaseline = wm.pos[0] === 't' ? 'top' : wm.pos[0] === 'b' ? 'bottom' : 'middle';
++  const x = wm.pos[1] === 'l' ? pad : wm.pos[1] === 'r' ? W - pad : W / 2;
++  const y = wm.pos[0] === 't' ? pad : wm.pos[0] === 'b' ? H - pad : H / 2;
++  ctx.fillText(wm.text, x, y);
++  ctx.restore();
++}
++
+ function render() {
+   if (!st) return;
+   const { w, h } = outDims();
+@@ -194,6 +277,8 @@ function render() {
+   if (fs) ctx.filter = fs;
+   drawGeometry(ctx, w, h);
+   ctx.filter = 'none';
++  drawAnnotations(ctx, drawing ? st.annotations.concat([drawing]) : st.annotations);
++  drawWatermark(ctx, w, h);
+   $('#ed-dims').textContent = `${w} × ${h} px`;
+   if (document.activeElement !== $('#ed-w')) $('#ed-w').value = w;
+   if (document.activeElement !== $('#ed-h')) $('#ed-h').value = h;
+@@ -209,13 +294,181 @@ function outCanvas() {
+   if (fs) ctx.filter = fs;
+   drawGeometry(ctx, w, h);
+   ctx.filter = 'none';
++  drawAnnotations(ctx, st.annotations);
++  drawWatermark(ctx, w, h);
+   return c;
+ }
+ 
++/* ---------- tools ---------- */
++function bindTools() {
++  $$('#ed-tools button').forEach((b) => {
++    b.addEventListener('click', () => {
++      tool = b.dataset.tool;
++      $$('#ed-tools button').forEach((x) => x.classList.toggle('active', x === b));
++      $('#emoji-palette').hidden = tool !== 'emoji';
++      hideTextInput();
++      drawing = null;
++      if (st) render();
++    });
++  });
++  $('#ed-color').addEventListener('input', (e) => { color = e.target.value; });
++  $('#ed-size').addEventListener('input', (e) => { size = parseInt(e.target.value, 10); });
++
++  const c = canvas();
++  c.style.touchAction = 'none';
++  c.addEventListener('pointerdown', onPointerDown);
++  c.addEventListener('pointermove', onPointerMove);
++  c.addEventListener('pointerup', onPointerUp);
++}
++
++let color = '#22d3ee', size = 6;
++
++function toPx(e) {
++  const c = canvas();
++  const r = c.getBoundingClientRect();
++  return {
++    x: clamp((e.clientX - r.left) / r.width * c.width, 0, c.width),
++    y: clamp((e.clientY - r.top) / r.height * c.height, 0, c.height)
++  };
++}
++
++function onPointerDown(e) {
++  if (!st || cropping || tool === 'none') return;
++  const p = toPx(e);
++  if (tool === 'text') { showTextInput(p, e); return; }
++  if (tool === 'emoji') {
++    if (pendingEmoji) {
++      mutate({ annotations: st.annotations.concat([{ type: 'emoji', x: p.x, y: p.y, ch: pendingEmoji, size, color: '#fff' }]) });
++      pendingEmoji = null;
++    }
++    return;
++  }
++  canvas().setPointerCapture(e.pointerId);
++  if (tool === 'brush') drawing = { type: 'brush', pts: [p], color, size };
++  else drawing = { type: tool, x1: p.x, y1: p.y, x2: p.x, y2: p.y, color, size };
++  render();
++}
++
++function onPointerMove(e) {
++  if (!drawing) return;
++  const p = toPx(e);
++  if (drawing.type === 'brush') drawing.pts.push(p);
++  else { drawing.x2 = p.x; drawing.y2 = p.y; }
++  render();
++}
++
++function onPointerUp() {
++  if (!drawing) return;
++  const d = drawing;
++  drawing = null;
++  const min = d.type === 'brush' ? 3 : 8;
++  const moved = d.type === 'brush'
++    ? d.pts.length > 2
++    : (Math.abs(d.x2 - d.x1) > min || Math.abs(d.y2 - d.y1) > min);
++  if (moved) mutate({ annotations: st.annotations.concat([d]) });
++  else render();
++}
++
++function showTextInput(p, e) {
++  const input = $('#ed-text-tool-input');
++  const stage = $('#editor-stage');
++  const r = stage.getBoundingClientRect();
++  input.style.left = (e.clientX - r.left) + 'px';
++  input.style.top = (e.clientY - r.top) + 'px';
++  input.hidden = false;
++  input.value = '';
++  input.dataset.x = p.x;
++  input.dataset.y = p.y;
++  setTimeout(() => input.focus(), 30);
++  input.onkeydown = (ev) => {
++    if (ev.key === 'Enter') {
++      const text = input.value.trim();
++      if (text) {
++        mutate({
++          annotations: st.annotations.concat([{
++            type: 'text', x: +input.dataset.x, y: +input.dataset.y, text, color, size
++          }])
++        });
++      }
++      hideTextInput();
++    }
++    if (ev.key === 'Escape') hideTextInput();
++  };
++}
++function hideTextInput() { const i = $('#ed-text-tool-input'); if (i) { i.hidden = true; i.onkeydown = null; } }
++
++function buildEmojiPalette() {
++  const wrap = $('#emoji-palette');
++  EMOJIS.forEach((ch) => {
++    const b = document.createElement('button');
++    b.textContent = ch.trim();
++    b.addEventListener('click', () => { pendingEmoji = b.textContent; toast('Now tap the image to place “' + b.textContent + '”'); });
++    wrap.appendChild(b);
++  });
++}
++
++function bindWatermark() {
++  const upd = () => {
++    if (!st) return;
++    st.watermark = {
++      on: $('#wm-on').checked,
++      text: $('#wm-text').value,
++      pos: $('#wm-pos').value,
++      color: $('#wm-color').value,
++      size: +$('#wm-size').value,
++      opacity: +$('#wm-opacity').value
++    };
++    render();
++  };
++  const push = () => { if (st) mutate({}); };
++  ['#wm-on', '#wm-text', '#wm-pos', '#wm-color', '#wm-size', '#wm-opacity'].forEach((sel) => {
++    $(sel).addEventListener('input', upd);
++    $(sel).addEventListener('change', push);
++  });
++}
++
++function syncWatermarkInputs() {
++  if (!st?.watermark) return;
++  const wm = st.watermark;
++  $('#wm-on').checked = wm.on;
++  $('#wm-text').value = wm.text || '';
++  $('#wm-pos').value = wm.pos;
++  $('#wm-color').value = wm.color;
++  $('#wm-size').value = wm.size;
++  $('#wm-opacity').value = wm.opacity;
++}
++
++/* ---------- auto enhance ---------- */
++function autoEnhance() {
++  if (!st) { toast('Load an image first ✨', 'warn'); return; }
++  const g = geoDims();
++  const scale = Math.min(1, 120 / Math.max(g.w, g.h));
++  const c = document.createElement('canvas');
++  c.width = Math.max(1, Math.round(g.w * scale));
++  c.height = Math.max(1, Math.round(g.h * scale));
++  const ctx = c.getContext('2d');
++  drawGeometry(ctx, c.width, c.height);
++  const d = ctx.getImageData(0, 0, c.width, c.height).data;
++  let sum = 0, sum2 = 0, n = 0;
++  for (let i = 0; i < d.length; i += 4) {
++    const l = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
++    sum += l; sum2 += l * l; n++;
++  }
++  const mean = sum / n;
++  const std = Math.sqrt(Math.max(1, sum2 / n - mean * mean));
++  const f = { ...st.filters };
++  f.brightness = Math.round(clamp(100 * (115 / Math.max(25, mean)), 82, 132));
++  f.contrast = Math.round(clamp(100 * (54 / Math.max(12, std)), 88, 148));
++  f.saturate = Math.round(clamp(f.saturate * 1.12, 100, 160));
++  mutate({ filters: f });
++  toast(`✨ Enhanced — brightness ${f.brightness}%, contrast ${f.contrast}%, saturation ${f.saturate}%`, 'ok', 4500);
++}
++
+ /* ---------- crop overlay ---------- */
+ function startCrop() {
+   if (!st) { toast('Load an image first ✨', 'warn'); return; }
+   cropping = true; cropSel = null;
++  hideTextInput();
+   $('#crop-layer').hidden = false;
+   $('#crop-hint').hidden = false;
+   $('#ed-crop-start').hidden = true;
+@@ -244,8 +497,8 @@ function setupCropLayer() {
+   const toCanvasPx = (e) => {
+     const r = c.getBoundingClientRect();
+     return {
+-      x: Math.max(0, Math.min(c.width, ((e.clientX - r.left) / r.width) * c.width)),
+-      y: Math.max(0, Math.min(c.height, ((e.clientY - r.top) / r.height) * c.height))
++      x: clamp((e.clientX - r.left) / r.width * c.width, 0, c.width),
++      y: clamp((e.clientY - r.top) / r.height * c.height, 0, c.height)
+     };
+   };
+ 
+@@ -257,29 +510,33 @@ function setupCropLayer() {
+   layer.onpointermove = (e) => {
+     if (!start) return;
+     const p = toCanvasPx(e);
+-    const x = Math.min(start.x, p.x), y = Math.min(start.y, p.y);
+-    const w = Math.abs(p.x - start.x), h = Math.abs(p.y - start.y);
+-    const r = c.getBoundingClientRect();
+-    rect.style.left = (x / c.width) * 100 + '%';
+-    rect.style.top = (y / c.height) * 100 + '%';
++    let x1 = Math.min(start.x, p.x), y1 = Math.min(start.y, p.y);
++    let w = Math.abs(p.x - start.x), h = Math.abs(p.y - start.y);
++    // aspect-ratio constraint
++    const ratio = $('#ed-crop-ratio').value;
++    if (ratio !== 'free') {
++      const [rw, rh] = ratio.split(':').map(Number);
++      h = Math.min(w * rh / rw, c.height);
++      w = h * rw / rh;
++      if (p.x < start.x) x1 = start.x - w;
++      if (p.y < start.y) y1 = start.y - h;
++      x1 = clamp(x1, 0, c.width - w);
++      y1 = clamp(y1, 0, c.height - h);
++    }
++    rect.style.left = (x1 / c.width) * 100 + '%';
++    rect.style.top = (y1 / c.height) * 100 + '%';
+     rect.style.width = (w / c.width) * 100 + '%';
+     rect.style.height = (h / c.height) * 100 + '%';
+-    cropSel = { x, y, w, h };
++    cropSel = { x: x1, y: y1, w, h };
+     $('#crop-size').textContent = `${Math.round(w)} × ${Math.round(h)} px`;
+   };
+   layer.onpointerup = () => {
+     start = null;
+-    if (cropSel && cropSel.w > 12 && cropSel.h > 12) {
+-      $('#ed-crop-apply').hidden = false;
+-    } else {
+-      cropSel = null;
+-      rect.hidden = true;
+-      $('#ed-crop-apply').hidden = true;
+-    }
++    if (cropSel && cropSel.w > 12 && cropSel.h > 12) $('#ed-crop-apply').hidden = false;
++    else { cropSel = null; rect.hidden = true; $('#ed-crop-apply').hidden = true; }
+   };
+ }
+ 
+-/* map a point in canvas (display/output) space back to source image px */
+ function canvasToSource(px, py) {
+   const img = st.img;
+   const cx = (st.crop ? st.crop.x : 0) + (st.crop ? st.crop.w : img.width) / 2;
+@@ -287,7 +544,6 @@ function canvasToSource(px, py) {
+   const { w: W, h: H } = outDims();
+   const a = (st.rotation * Math.PI) / 180;
+   const cos = Math.cos(a), sin = Math.sin(a);
+-  // forward: fu,fv -> x' = fu cos - fv sin ; y' = fu sin + fv cos
+   const dx = px - W / 2, dy = py - H / 2;
+   let fu = dx * cos + dy * sin;
+   let fv = -dx * sin + dy * cos;
+@@ -301,13 +557,12 @@ function applyCrop() {
+   const p1 = canvasToSource(cropSel.x, cropSel.y);
+   const p2 = canvasToSource(cropSel.x + cropSel.w, cropSel.y + cropSel.h);
+   const img = st.img;
+-  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+   const x = clamp(Math.round(Math.min(p1.x, p2.x)), 0, img.width - 1);
+   const y = clamp(Math.round(Math.min(p1.y, p2.y)), 0, img.height - 1);
+   const w = clamp(Math.round(Math.abs(p2.x - p1.x)), 1, img.width - x);
+   const h = clamp(Math.round(Math.abs(p2.y - p1.y)), 1, img.height - y);
+   endCrop();
+-  st.scaleTo = null; // avoid double-applying previous resize to the new crop
++  st.scaleTo = null;
+   mutate({ crop: { x, y, w, h } });
+   toast(`Cropped to ${w} × ${h} ✂️`, 'ok');
+ }
+@@ -390,3 +645,8 @@ async function doDownload() {
+   download(blob, exportName());
+   toast('Image downloaded ⬇️', 'ok');
+ }
++
++function showStage(show) {
++  $('#editor-placeholder').style.display = show ? 'none' : 'block';
++  $('#editor-stage').hidden = !show;
++}
+diff --git a/js/exporter.js b/js/exporter.js
+index 64e9bd4..5a25816 100644
+--- a/js/exporter.js
+@@ -100,9 +100,10 @@ async function chatTranscript() {
+   return { txt: lines.join('\n'), json: JSON.stringify(rows, null, 2) };
+ }
+ 
+-/* Export every stored file + chat history + a readme */
++/* Export every stored file + chat history + a readme (vault files are skipped — they're encrypted) */
+ export async function exportEverything() {
+-  const files = await allFiles();
++  const files = (await allFiles()).filter((f) => !f.vault);
++  const vaultCount = (await allFiles()).length - files.length;
+   const { txt, json } = await chatTranscript();
+   const entries = [];
+ 
+@@ -140,10 +141,91 @@ export async function exportEverything() {
+   toast(`Exported ${files.length} file(s) + chat history`, 'ok');
+ }
+ 
++/* Import files (and chat history) from a ZIP — handles our own exports plus regular zips */
++export async function importZip(zipBlob, { addFile, putChatRow, allChat } ) {
++  const entries = await readZip(zipBlob);
++  if (!entries.length) { toast('That ZIP appears to be empty.', 'warn'); return { files: 0, chat: 0 }; }
++
++  let fileCount = 0, chatCount = 0;
++  const existingChat = new Set((await allChat()).map((r) => r.id));
++
++  for (const e of entries) {
++    if (e.name.endsWith('/') || /(^|\/)__MACOSX\//.test(e.name) || /(^|\/)\.DS_Store$/.test(e.name)) continue;
++    let name = e.name;
++    const isOurs = /^files\//.test(name);
++    if (isOurs) name = name.replace(/^files\//, '');
++    if (/^chat\/history\.json$/.test(e.name)) {
++      try {
++        const rows = JSON.parse(await e.blob.text());
++        for (const r of rows) {
++          if (r && r.id && !existingChat.has(r.id)) { await putChatRow(r); existingChat.add(r.id); chatCount++; }
++        }
++      } catch { /* malformed history */ }
++      continue;
++    }
++    if (/^chat\//.test(e.name) || /^README\.txt$/.test(e.name)) continue;
++    if (!name) continue;
++    await addFile(e.blob, name.split('/').pop() || name);
++    fileCount++;
++  }
++  return { files: fileCount, chat: chatCount };
++}
++
++/* Parse a ZIP archive (store + deflate) → [{name, method, blob}] */
++export async function readZip(file) {
++  const buf = new Uint8Array(await file.arrayBuffer());
++  const td = new TextDecoder();
++
++  // find End of Central Directory
++  let eocd = -1;
++  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 66000); i--) {
++    if (buf[i] === 0x50 && buf[i + 1] === 0x4b && buf[i + 2] === 0x05 && buf[i + 3] === 0x06) { eocd = i; break; }
++  }
++  if (eocd < 0) throw new Error('Not a valid ZIP file');
++  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
++  const count = dv.getUint16(eocd + 10, true);
++  let off = dv.getUint32(eocd + 16, true);
++
++  const entries = [];
++  for (let n = 0; n < count; n++) {
++    if (dv.getUint32(off, true) !== 0x02014b50) break;
++    const method = dv.getUint16(off + 10, true);
++    const csize = dv.getUint32(off + 20, true);
++    const nameLen = dv.getUint16(off + 28, true);
++    const extraLen = dv.getUint16(off + 30, true);
++    const commentLen = dv.getUint16(off + 32, true);
++    const localOff = dv.getUint32(off + 42, true);
++    const name = td.decode(buf.subarray(off + 46, off + 46 + nameLen));
++
++    // local header
++    const lNameLen = dv.getUint16(localOff + 26, true);
++    const lExtraLen = dv.getUint16(localOff + 28, true);
++    const dataStart = localOff + 30 + lNameLen + lExtraLen;
++    const data = buf.subarray(dataStart, dataStart + csize);
++
++    let blob;
++    if (method === 0) blob = new Blob([data]);
++    else if (method === 8) {
++      if (typeof DecompressionStream === 'undefined') throw new Error('This browser cannot decompress ZIP entries');
++      const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
++      blob = await new Response(stream).blob();
++    } else throw new Error('Unsupported compression method ' + method);
++
++    entries.push({ name, method, blob });
++    off += 46 + nameLen + extraLen + commentLen;
++  }
++  return entries;
++}
++
+ /* Export only files (used by Files tab) */
+ export async function exportAllFiles() {
+-  const files = await allFiles();
+-  if (!files.length) { toast('No files to export yet.', 'warn'); return; }
++  const all = await allFiles();
++  const files = all.filter((f) => !f.vault);
++  const vaultCount = all.length - files.length;
++  if (!files.length) {
++    toast(vaultCount ? 'Only vault files found — restore them first to export.' : 'No files to export yet.', 'warn');
++    return;
++  }
+   const entries = [];
+   const used = new Set();
+   for (const f of files) {
+@@ -158,5 +240,5 @@ export async function exportAllFiles() {
+     entries.push({ name, data: await u8(f.blob) });
+   }
+   download(makeZip(entries), 'ayomide-files.zip');
+-  toast(`Exported ${files.length} file(s)`, 'ok');
++  toast(`Exported ${files.length} file(s)${vaultCount ? ` (${vaultCount} vault file(s) skipped)` : ''}`, 'ok', 4500);
+ }
+diff --git a/js/files.js b/js/files.js
+index 346ee94..bfe78d4 100644
+--- a/js/files.js
+@@ -1,15 +1,24 @@
+-/* Ayomide Studio — file management (upload, browse, preview, rename, delete) */
++/* Ayomide Studio — files: folders, tags, gallery, bulk, duplicates, vault, zip import */
+ import {
+-  $, $$, esc, fmtBytes, fmtDate, toast, modal, confirmDialog, download,
+-  isImage, isVideo, isAudio, isText, fileIcon, emit, on
++  $, $$, esc, uid, fmtBytes, fmtDate, toast, modal, confirmDialog, download,
++  isImage, isVideo, isAudio, isText, fileIcon, emit, on, sha1Blob,
++  encryptBlob, decryptBlob
+ } from './utils.js';
+-import { addFile, allFiles, deleteFile, updateFile, clearFiles } from './db.js';
+-import { exportAllFiles } from './exporter.js';
++import { addFile, allFiles, deleteFile, updateFile, clearFiles, kvGet, kvSet } from './db.js';
++import { exportAllFiles, makeZip, importZip } from './exporter.js';
++import { vaultReady, getVaultKey } from './vault.js';
+ 
+ let files = [];
+ let filter = 'all';
+ let query = '';
+-const urlCache = new Map(); // id -> objectURL
++let folderFilter = 'all';
++let tagFilter = null;
++let vaultOnly = false;
++let viewMode = 'grid';
++let bulkMode = false;
++const selected = new Set();
++let folders = [];
++const urlCache = new Map();
+ 
+ export async function init() {
+   $('#btn-upload').addEventListener('click', () => $('#file-input').click());
+@@ -18,6 +27,28 @@ export async function init() {
+   $('#file-filter').addEventListener('change', (e) => { filter = e.target.value; render(); });
+   $('#btn-export-zip').addEventListener('click', exportAllFiles);
+ 
++  $('#folder-select').addEventListener('change', (e) => { folderFilter = e.target.value; render(); });
++  $('#btn-new-folder').addEventListener('click', newFolder);
++  $('#btn-view-toggle').addEventListener('click', () => {
++    viewMode = viewMode === 'grid' ? 'gallery' : 'grid';
++    $('#btn-view-toggle').textContent = viewMode === 'grid' ? '🖼' : '☰';
++    render();
++  });
++  $('#btn-find-dupes').addEventListener('click', findDupes);
++  $('#btn-import-zip').addEventListener('click', () => $('#zip-input').click());
++  $('#zip-input').addEventListener('change', onZipPick);
++
++  $('#btn-bulk').addEventListener('click', () => {
++    bulkMode = !bulkMode;
++    selected.clear();
++    $('#btn-bulk').classList.toggle('primary', bulkMode);
++    render();
++  });
++  $('#bulk-cancel').addEventListener('click', () => { bulkMode = false; selected.clear(); $('#btn-bulk').classList.remove('primary'); render(); });
++  $('#bulk-delete').addEventListener('click', bulkDelete);
++  $('#bulk-move').addEventListener('click', () => bulkMove());
++  $('#bulk-zip').addEventListener('click', bulkZip);
++
+   // drag & drop
+   const dz = $('#dropzone');
+   ['dragenter', 'dragover'].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('drag'); }));
+@@ -26,14 +57,19 @@ export async function init() {
+   window.addEventListener('dragover', (e) => e.preventDefault());
+   window.addEventListener('drop', (e) => e.preventDefault());
+ 
++  folders = await kvGet('folders', []);
+   await refresh();
++  buildFolderSelect();
++  renderTags();
+ }
+ 
+ export function pickLocal() { $('#file-input').click(); }
++export function importZipPick() { $('#zip-input').click(); }
+ 
+ export async function refresh() {
+   files = await allFiles();
+   render();
++  renderTags();
+   emit('files:changed');
+ }
+ 
+@@ -50,7 +86,11 @@ export async function handleFileList(list) {
+   if (!arr.length) return;
+   let n = 0;
+   for (const f of arr) {
+-    try { await addFile(f, f.name); n++; } catch { toast(`Failed to store ${f.name}`, 'error'); }
++    try {
++      const rec = await addFile(f, f.name, { folder: folderFilter !== 'all' ? folderFilter : 'root' });
++      sha1Blob(f).then((h) => updateFile(rec.id, { hash: h })).catch(() => { });
++      n++;
++    } catch { toast(`Failed to store ${f.name}`, 'error'); }
+   }
+   if (n) {
+     toast(`Uploaded ${n} file${n > 1 ? 's' : ''} 📁`, 'ok');
+@@ -58,53 +98,160 @@ export async function handleFileList(list) {
+   }
+ }
+ 
++/* ---------- folders ---------- */
++function buildFolderSelect() {
++  const sel = $('#folder-select');
++  const cur = folderFilter;
++  sel.innerHTML = `<option value="all">📂 All files</option><option value="root">🏠 Home</option>`;
++  folders.forEach((f) => {
++    const o = document.createElement('option');
++    o.value = f.id;
++    o.textContent = '📁 ' + f.name;
++    sel.appendChild(o);
++  });
++  sel.value = cur;
++  if (sel.value !== cur) { folderFilter = 'all'; sel.value = 'all'; }
++}
++
++async function newFolder() {
++  const input = document.createElement('input');
++  input.type = 'text';
++  input.placeholder = 'Folder name (e.g. Work, Family…)';
++  modal({
++    title: 'New folder',
++    body: input,
++    actions: [
++      { label: 'Cancel', cls: 'ghost' },
++      {
++        label: 'Create', cls: 'primary', onClick: async (close) => {
++          const name = input.value.trim();
++          if (!name) return;
++          const f = { id: uid(), name };
++          folders.push(f);
++          await kvSet('folders', folders);
++          buildFolderSelect();
++          folderFilter = f.id;
++          $('#folder-select').value = f.id;
++          close();
++          render();
++          toast(`Folder “${name}” created 📁`, 'ok');
++        }
++      }
++    ]
++  });
++  setTimeout(() => input.focus(), 40);
++}
++
++function moveModal(ids) {
++  const wrap = document.createElement('div');
++  const list = document.createElement('div');
++  list.className = 'btn-row wrap';
++  const mk = async (id, label) => {
++    for (const fid of ids) await updateFile(fid, { folder: id });
++    await refresh();
++    toast(`Moved ${ids.length} file(s) to ${label} 📁`, 'ok');
++    m.close();
++  };
++  [['root', '🏠 Home'], ...folders.map((f) => [f.id, '📁 ' + f.name])].forEach(([id, label]) => {
++    const b = document.createElement('button');
++    b.className = 'btn';
++    b.textContent = label;
++    b.addEventListener('click', () => mk(id, label));
++    list.appendChild(b);
++  });
++  wrap.appendChild(list);
++  const m = modal({ title: `Move ${ids.length} file(s) to…`, body: wrap });
++}
++
++/* ---------- filtering & render ---------- */
+ function matchesFilter(rec) {
+-  if (filter === 'all') return true;
++  if (vaultOnly && !rec.vault) return false;
++  if (!vaultOnly && rec.vault && folderFilter === 'all' && tagFilter === null) { /* still show vault in All */ }
+   const t = rec.type || '';
+-  if (filter === 'image') return isImage(t);
+-  if (filter === 'video') return isVideo(t);
+-  if (filter === 'audio') return isAudio(t);
+-  if (filter === 'text') return isText(t, rec.name);
++  if (filter === 'image' && !isImage(t)) return false;
++  if (filter === 'video' && !isVideo(t)) return false;
++  if (filter === 'audio' && !isAudio(t)) return false;
++  if (filter === 'text' && !isText(t, rec.name)) return false;
++  if (folderFilter !== 'all' && (rec.folder || 'root') !== folderFilter) return false;
++  if (tagFilter && !(rec.tags || []).includes(tagFilter)) return false;
++  if (query && !(rec.name || '').toLowerCase().includes(query)) return false;
+   return true;
+ }
+ 
+ function render() {
+   const grid = $('#files-grid');
+-  const shown = files.filter((f) => matchesFilter(f) && (!query || (f.name || '').toLowerCase().includes(query)));
++  const pool = viewMode === 'gallery' ? files.filter((f) => isImage(f.type) && !f.vault) : files;
++  const shown = pool.filter(matchesFilter);
++  const galleryImgs = shown.filter((f) => isImage(f.type) && !f.vault);
++
+   $('#files-empty').style.display = files.length ? 'none' : 'block';
+-  grid.style.display = shown.length ? 'grid' : 'none';
+-  $('#files-count').textContent = files.length ? `${shown.length} of ${files.length} · ${fmtBytes(files.reduce((n, f) => n + (f.size || 0), 0))}` : '';
++  grid.style.display = shown.length ? (viewMode === 'gallery' ? 'block' : 'grid') : 'none';
++  grid.classList.toggle('gallery', viewMode === 'gallery');
++  $('#files-count').textContent = files.length
++    ? `${shown.length} of ${files.length} · ${fmtBytes(files.reduce((n, f) => n + (f.size || 0), 0))}`
++    : '';
++
++  $('#bulk-bar').hidden = !(bulkMode && selected.size);
++  $('#bulk-count').textContent = `${selected.size} selected`;
+ 
+   grid.innerHTML = '';
+-  shown.forEach((rec) => grid.appendChild(card(rec)));
++  if (viewMode === 'gallery') {
++    galleryImgs.forEach((rec, i) => grid.appendChild(galleryCard(rec, i, galleryImgs)));
++  } else {
++    shown.forEach((rec) => grid.appendChild(card(rec)));
++  }
++}
++
++function thumbHtml(rec) {
++  if (rec.vault) return vaultReady() ? '🔓' : '🔒';
++  if (isImage(rec.type)) return `<img src="${urlFor(rec)}" alt="" loading="lazy">`;
++  return fileIcon(rec);
+ }
+ 
+ function card(rec) {
+   const el = document.createElement('div');
+   el.className = 'file-card';
+-  const thumb = isImage(rec.type)
+-    ? `<img src="${urlFor(rec)}" alt="" loading="lazy">`
+-    : fileIcon(rec);
+-  const canEdit = isImage(rec.type) || isText(rec.type, rec.name);
++  const canEdit = (isImage(rec.type) || isText(rec.type, rec.name)) && !rec.vault;
++  const tagHtml = (rec.tags || []).length
++    ? `<div class="file-meta">🏷 ${esc(rec.tags.slice(0, 3).join(', '))}</div>` : '';
+   el.innerHTML = `
+-    <div class="file-thumb" data-view>${thumb}</div>
++    <div class="file-thumb" data-view>${thumbHtml(rec)}</div>
+     <div class="file-body">
+       <div class="file-name" title="${esc(rec.name)}">${esc(rec.name)}</div>
+       <div class="file-meta">${fmtBytes(rec.size)} · ${fmtDate(rec.addedAt)}</div>
++      ${tagHtml}
+       <div class="file-actions">
++        ${bulkMode ? `<button data-sel>${selected.has(rec.id) ? '☑️' : '⬜'}</button>` : ''}
+         <button data-view title="Preview">👁</button>
+         <button data-dl title="Download">⬇️</button>
+         ${canEdit ? '<button data-edit title="Edit">✏️</button>' : ''}
+-        ${isImage(rec.type) ? '<button data-vid title="Use in video">🎬</button>' : ''}
++        ${isImage(rec.type) && !rec.vault ? '<button data-vid title="Use in video">🎬</button>' : ''}
++        <button data-move title="Move to folder">📁</button>
++        <button data-tags title="Tags">🏷</button>
++        ${rec.vault
++      ? '<button data-unvault title="Restore from vault (decrypt)">🔓</button>'
++      : '<button data-vault title="Move to encrypted vault">🔒</button>'}
+         <button data-del title="Delete">✕</button>
+       </div>
+     </div>`;
+-  el.querySelector('[data-view]').addEventListener('click', () => preview(rec));
+-  el.querySelector('[data-dl]').addEventListener('click', () => download(rec.blob, rec.name));
++  const selBtn = el.querySelector('[data-sel]');
++  if (selBtn) selBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleSelect(rec.id); });
++  el.querySelector('[data-view]').addEventListener('click', () => bulkMode ? toggleSelect(rec.id) : preview(rec));
++  el.querySelector('[data-dl]').addEventListener('click', async () => {
++    const blob = await readableBlob(rec);
++    if (blob) download(blob, rec.name); else toast('Unlock the vault first (Settings → Security).', 'warn');
++  });
++  el.querySelector('[data-move]').addEventListener('click', () => moveModal([rec.id]));
++  el.querySelector('[data-tags]').addEventListener('click', () => tagModal(rec));
++  const vaultBtn = el.querySelector('[data-vault]');
++  if (vaultBtn) vaultBtn.addEventListener('click', () => toVault(rec));
++  const unvaultBtn = el.querySelector('[data-unvault]');
++  if (unvaultBtn) unvaultBtn.addEventListener('click', () => fromVault(rec));
+   el.querySelector('[data-del]').addEventListener('click', async () => {
+     if (await confirmDialog('Delete file?', `“${rec.name}” will be permanently removed from this device.`, { danger: true, okLabel: 'Delete' })) {
+       await deleteFile(rec.id);
+       forgetUrl(rec.id);
++      selected.delete(rec.id);
+       toast('File deleted');
+       await refresh();
+     }
+@@ -119,68 +266,202 @@ function card(rec) {
+   return el;
+ }
+ 
+-/* ---------- preview modal ---------- */
+-export function preview(rec) {
++function galleryCard(rec, idx, list) {
++  const el = document.createElement('div');
++  el.className = 'file-card';
++  el.innerHTML = `
++    <div class="file-thumb"><img src="${urlFor(rec)}" alt="" loading="lazy"></div>
++    <div class="file-body">
++      <div class="file-name" title="${esc(rec.name)}">${esc(rec.name)}</div>
++      <div class="file-meta">${fmtBytes(rec.size)}</div>
++    </div>`;
++  el.querySelector('.file-thumb').addEventListener('click', () => lightbox(idx, list));
++  return el;
++}
++
++function lightbox(idx, list) {
++  const body = document.createElement('div');
++  body.className = 'lightbox';
++  const img = new Image();
++  const name = document.createElement('p');
++  name.className = 'muted center';
++  const nav = document.createElement('div');
++  nav.className = 'lightbox-nav';
++  nav.innerHTML = '<button class="btn">← Prev</button><button class="btn">Next →</button>';
++  const show = (i) => {
++    const rec = list[(i + list.length) % list.length];
++    img.src = urlFor(rec);
++    name.textContent = `${rec.name} · ${fmtBytes(rec.size)}`;
++    cur = (i + list.length) % list.length;
++  };
++  let cur = idx;
++  nav.children[0].addEventListener('click', () => show(cur - 1));
++  nav.children[1].addEventListener('click', () => show(cur + 1));
++  body.append(img, name, nav);
++  const m = modal({ title: 'Gallery', body, wide: true });
++  show(idx);
++}
++
++function toggleSelect(id) {
++  if (selected.has(id)) selected.delete(id); else selected.add(id);
++  render();
++}
++
++/* ---------- tags ---------- */
++function tagModal(rec) {
++  const input = document.createElement('input');
++  input.type = 'text';
++  input.value = (rec.tags || []).join(', ');
++  input.placeholder = 'Comma-separated tags (e.g. work, logo, 2026)';
++  modal({
++    title: 'Tags · ' + rec.name,
++    body: input,
++    actions: [
++      { label: 'Cancel', cls: 'ghost' },
++      {
++        label: 'Save', cls: 'primary', onClick: async (close) => {
++          const tags = input.value.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 12);
++          await updateFile(rec.id, { tags });
++          close();
++          await refresh();
++        }
++      }
++    ]
++  });
++  setTimeout(() => input.focus(), 40);
++}
++
++function renderTags() {
++  const row = $('#tag-row');
++  const all = new Set();
++  files.forEach((f) => (f.tags || []).forEach((t) => all.add(t)));
++  const hasVault = files.some((f) => f.vault);
++  row.innerHTML = '';
++  if (!all.size && !hasVault) return;
++  if (hasVault) {
++    const c = document.createElement('button');
++    c.className = 'chip lockchip' + (vaultOnly ? ' active' : '');
++    c.textContent = '🔒 Vault';
++    c.addEventListener('click', () => {
++      vaultOnly = !vaultOnly;
++      renderTags();
++      render();
++      if (vaultOnly && !vaultReady()) toast('Vault is locked — unlock it in Settings → Security to open files.', 'warn', 4500);
++    });
++    row.appendChild(c);
++  }
++  [...all].sort().forEach((t) => {
++    const c = document.createElement('button');
++    c.className = 'chip' + (tagFilter === t ? ' active' : '');
++    c.textContent = '🏷 ' + t;
++    c.addEventListener('click', () => {
++      tagFilter = tagFilter === t ? null : t;
++      renderTags();
++      render();
++    });
++    row.appendChild(c);
++  });
++}
++
++/* ---------- vault ---------- */
++async function toVault(rec) {
++  if (rec.vault) return;
++  if (!vaultReady()) {
++    toast('Enable app lock & unlock the vault first — Settings → Security 🔐', 'warn', 5000);
++    emit('nav', 'settings');
++    return;
++  }
++  try {
++    const { blob: enc, ivHex } = await encryptBlob(rec.blob, getVaultKey());
++    await updateFile(rec.id, { vault: true, blob: enc, iv: ivHex, hash: null });
++    forgetUrl(rec.id);
++    toast(`“${rec.name}” moved to the Vault — AES-256 encrypted 🔒`, 'ok');
++    await refresh();
++  } catch (err) {
++    toast('Encryption failed: ' + err.message, 'error');
++  }
++}
++
++async function fromVault(rec) {
++  if (!rec.vault) return;
++  if (!vaultReady()) { toast('Unlock the vault first (Settings → Security).', 'warn'); emit('nav', 'settings'); return; }
++  try {
++    const dec = await decryptBlob(rec.blob, getVaultKey(), rec.iv);
++    await updateFile(rec.id, { vault: false, blob: dec, iv: null });
++    toast(`“${rec.name}” restored from the Vault 🔓`, 'ok');
++    await refresh();
++  } catch {
++    toast('Could not decrypt — wrong key. Unlock the vault in Settings.', 'error');
++  }
++}
++
++async function readableBlob(rec) {
++  if (!rec.vault) return rec.blob;
++  if (!vaultReady()) return null;
++  try { return await decryptBlob(rec.blob, getVaultKey(), rec.iv); } catch { return null; }
++}
++
++/* ---------- preview & text editing ---------- */
++export async function preview(rec) {
+   const t = rec.type || '';
++  const blob = await readableBlob(rec);
++  if (rec.vault && !blob) { toast('Unlock the vault in Settings to open this file.', 'warn'); return; }
+   let body;
+-  if (isImage(t)) {
++  const url = blob ? URL.createObjectURL(blob) : null;
++  if (isImage(t) && url) {
+     body = document.createElement('div');
+     body.style.textAlign = 'center';
+     const img = new Image();
+-    img.src = urlFor(rec);
++    img.src = url;
+     img.style.maxWidth = '100%';
+     img.style.borderRadius = '10px';
+     body.appendChild(img);
+-  } else if (isVideo(t)) {
++  } else if (isVideo(t) && url) {
+     body = document.createElement('div');
+     const v = document.createElement('video');
+-    v.src = urlFor(rec);
+-    v.controls = true;
+-    v.autoplay = true;
+-    v.style.width = '100%';
+-    v.style.borderRadius = '10px';
++    v.src = url; v.controls = true; v.autoplay = true;
++    v.style.width = '100%'; v.style.borderRadius = '10px';
+     body.appendChild(v);
+-  } else if (isAudio(t)) {
++  } else if (isAudio(t) && url) {
+     body = document.createElement('div');
+     const a = document.createElement('audio');
+-    a.src = urlFor(rec);
+-    a.controls = true;
++    a.src = url; a.controls = true; a.autoplay = true;
+     a.style.width = '100%';
+-    a.autoplay = true;
+     body.appendChild(a);
+-  } else if (isText(t, rec.name) && rec.size < 400_000) {
++  } else if (isText(t, rec.name) && rec.size < 400_000 && blob) {
+     body = document.createElement('div');
+-    rec.blob.text().then((txt) => {
+-      const pre = document.createElement('pre');
+-      pre.style.whiteSpace = 'pre-wrap';
+-      pre.style.wordBreak = 'break-word';
+-      pre.style.fontSize = '13px';
+-      pre.textContent = txt;
+-      body.appendChild(pre);
+-    });
++    const txt = await blob.text();
++    const pre = document.createElement('pre');
++    pre.style.whiteSpace = 'pre-wrap';
++    pre.style.wordBreak = 'break-word';
++    pre.style.fontSize = '13px';
++    pre.textContent = txt;
++    body.appendChild(pre);
+   } else {
+     body = document.createElement('p');
+     body.innerHTML = `${fileIcon(rec)} No preview for this type — you can still download it.<br><br>
+       <b>${esc(rec.name)}</b><br><span class="muted">${esc(t || 'unknown type')} · ${fmtBytes(rec.size)}</span>`;
+   }
+-  modal({
++  const m = modal({
+     title: rec.name,
+     body,
+     wide: true,
+     actions: [
+-      { label: '⬇️ Download', cls: 'primary', onClick: (close) => { download(rec.blob, rec.name); } },
++      { label: '⬇️ Download', cls: 'primary', onClick: () => { if (blob) download(blob, rec.name); } },
+       { label: 'Close', cls: 'ghost' }
+     ]
+   });
++  m.back.addEventListener('click', () => { if (url) setTimeout(() => URL.revokeObjectURL(url), 500); }, { once: true });
+ }
+ 
+-/* ---------- text editing ---------- */
+ export async function editText(rec) {
++  const blob = await readableBlob(rec);
++  if (!blob) { toast('Unlock the vault to edit this file.', 'warn'); return; }
+   const ta = document.createElement('textarea');
+   ta.rows = 14;
+   ta.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+   ta.style.fontSize = '13px';
+-  ta.value = await rec.blob.text();
++  ta.value = await blob.text();
+   modal({
+     title: 'Edit · ' + rec.name,
+     body: ta,
+@@ -189,8 +470,8 @@ export async function editText(rec) {
+       {
+         label: '💾 Save', cls: 'primary',
+         onClick: async (close) => {
+-          const blob = new Blob([ta.value], { type: rec.type || 'text/plain' });
+-          await updateFile(rec.id, { blob, size: blob.size });
++          const nb = new Blob([ta.value], { type: rec.type || 'text/plain' });
++          await updateFile(rec.id, { blob: nb, size: nb.size });
+           toast('File saved ✅', 'ok');
+           close();
+           await refresh();
+@@ -200,10 +481,105 @@ export async function editText(rec) {
+   });
+ }
+ 
+-/* ---------- image picker used by editor & video tools ---------- */
++/* ---------- duplicates ---------- */
++async function findDupes() {
++  const plain = files.filter((f) => !f.vault && f.size > 0);
++  if (plain.length < 2) { toast('Need at least 2 files to compare.', 'warn'); return; }
++  toast('Scanning file contents…');
++  for (const f of plain) {
++    if (!f.hash) {
++      try {
++        const h = await sha1Blob(f.blob);
++        f.hash = h;
++        await updateFile(f.id, { hash: h });
++      } catch { }
++    }
++  }
++  const groups = new Map();
++  plain.filter((f) => f.hash).forEach((f) => {
++    if (!groups.has(f.hash)) groups.set(f.hash, []);
++    groups.get(f.hash).push(f);
++  });
++  const dupes = [...groups.values()].filter((g) => g.length > 1);
++  if (!dupes.length) { toast('No duplicates found ✨', 'ok'); return; }
++
++  const wrap = document.createElement('div');
++  wrap.innerHTML = `<p class="muted">${dupes.length} duplicate group(s) found.</p>`;
++  dupes.forEach((g, i) => {
++    const box = document.createElement('div');
++    box.style.cssText = 'border:1px solid var(--border);border-radius:10px;padding:10px;margin:8px 0;';
++    box.innerHTML = `<b>${esc(g[0].name)}</b> ×${g.length} <span class="muted">(${fmtBytes(g[0].size)} each)</span>
++      <ul style="margin:8px 0 0 18px;padding:0;font-size:13px;">
++        ${g.map((f) => `<li data-id="${f.id}">${esc(f.name)} · ${fmtDate(f.addedAt)}</li>`).join('')}
++      </ul>`;
++    const btn = document.createElement('button');
++    btn.className = 'btn warn slim';
++    btn.textContent = 'Keep newest, delete rest';
++    btn.addEventListener('click', async () => {
++      const sorted = [...g].sort((a, b) => b.addedAt - a.addedAt);
++      for (const f of sorted.slice(1)) { await deleteFile(f.id); forgetUrl(f.id); }
++      toast(`Group ${i + 1} cleaned ♻️`, 'ok');
++      await refresh();
++      box.remove();
++      if (!$('#files-grid')?.isConnected) m2.close?.();
++    });
++    box.appendChild(btn);
++    wrap.appendChild(box);
++  });
++  const m2 = modal({ title: '♻️ Duplicate files', body: wrap });
++}
++
++/* ---------- bulk actions ---------- */
++async function bulkDelete() {
++  if (!selected.size) return;
++  if (await confirmDialog(`Delete ${selected.size} file(s)?`, 'This cannot be undone.', { danger: true, okLabel: 'Delete' })) {
++    for (const id of selected) { await deleteFile(id); forgetUrl(id); }
++    selected.clear();
++    bulkMode = false;
++    $('#btn-bulk').classList.remove('primary');
++    await refresh();
++    toast('Deleted 🗑', 'ok');
++  }
++}
++
++function bulkMove() {
++  if (!selected.size) return;
++  moveModal([...selected]);
++}
++
++async function bulkZip() {
++  if (!selected.size) return;
++  const entries = [];
++  for (const id of selected) {
++    const rec = files.find((f) => f.id === id);
++    if (!rec || rec.vault) continue;
++    entries.push({ name: rec.name, data: new Uint8Array(await rec.blob.arrayBuffer()) });
++  }
++  if (!entries.length) { toast('No downloadable (non-vault) files selected.', 'warn'); return; }
++  download(makeZip(entries), 'ayomide-selection.zip');
++  toast(`Downloaded ${entries.length} file(s) 📦`, 'ok');
++}
++
++/* ---------- zip import ---------- */
++async function onZipPick(e) {
++  const f = e.target.files[0];
++  e.target.value = '';
++  if (!f) return;
++  toast('Reading ZIP…');
++  try {
++    const { addFile: af, putChatRow, allChat } = await import('./db.js');
++    const res = await importZip(f, { addFile: af, putChatRow, allChat });
++    await refresh();
++    toast(`Imported ${res.files} file(s)${res.chat ? ` + ${res.chat} chat message(s)` : ''} 🧳`, 'ok', 5000);
++  } catch (err) {
++    toast('Import failed: ' + err.message, 'error', 6000);
++  }
++}
++
++/* ---------- pickers used by other tools ---------- */
+ export function pickImages({ multiple = true, title = 'Choose images' } = {}) {
+   return new Promise((resolve) => {
+-    const imgs = files.filter((f) => isImage(f.type));
++    const imgs = files.filter((f) => isImage(f.type) && !f.vault);
+     if (!imgs.length) {
+       toast('No images in Files yet — upload some first.', 'warn');
+       resolve([]);
+@@ -212,7 +588,7 @@ export function pickImages({ multiple = true, title = 'Choose images' } = {}) {
+     const wrap = document.createElement('div');
+     const list = document.createElement('div');
+     list.className = 'pick-list';
+-    const selected = new Set();
++    const sel = new Set();
+     imgs.forEach((rec) => {
+       const b = document.createElement('button');
+       b.className = 'pick-item';
+@@ -220,8 +596,8 @@ export function pickImages({ multiple = true, title = 'Choose images' } = {}) {
+       b.innerHTML = `<img src="${urlFor(rec)}" alt=""><span>${esc(rec.name)}</span>`;
+       b.addEventListener('click', () => {
+         if (!multiple) { resolve([rec]); m.close(); return; }
+-        if (selected.has(rec.id)) { selected.delete(rec.id); b.style.borderColor = ''; }
+-        else { selected.add(rec.id); b.style.borderColor = 'var(--acc)'; }
++        if (sel.has(rec.id)) { sel.delete(rec.id); b.style.borderColor = ''; }
++        else { sel.add(rec.id); b.style.borderColor = 'var(--acc)'; }
+       });
+       list.appendChild(b);
+     });
+@@ -232,13 +608,33 @@ export function pickImages({ multiple = true, title = 'Choose images' } = {}) {
+       wide: true,
+       actions: multiple ? [
+         { label: 'Cancel', cls: 'ghost', onClick: (close) => { close(); resolve([]); } },
+-        {
+-          label: 'Add selected', cls: 'primary',
+-          onClick: (close) => { close(); resolve(imgs.filter((r) => selected.has(r.id))); }
+-        }
++        { label: 'Add selected', cls: 'primary', onClick: (close) => { close(); resolve(imgs.filter((r) => sel.has(r.id))); } }
+       ] : []
+     });
+   });
+ }
+ 
++export function pickAudio() {
++  return new Promise((resolve) => {
++    const auds = files.filter((f) => isAudio(f.type) && !f.vault);
++    if (!auds.length) {
++      toast('No audio in Files yet — upload a music track first.', 'warn');
++      resolve(null);
++      return;
++    }
++    const wrap = document.createElement('div');
++    const list = document.createElement('div');
++    list.className = 'btn-row wrap';
++    auds.forEach((rec) => {
++      const b = document.createElement('button');
++      b.className = 'btn';
++      b.textContent = `🎵 ${rec.name} (${fmtBytes(rec.size)})`;
++      b.addEventListener('click', () => { m.close(); resolve(rec); });
++      list.appendChild(b);
++    });
++    wrap.appendChild(list);
++    const m = modal({ title: 'Choose music', body: wrap });
++  });
++}
++
+ on('op', (name) => { if (name === 'upload') pickLocal(); });
+diff --git a/js/sync.js b/js/sync.js
+new file mode 100644
+index 0000000..1cedd94
+--- /dev/null
+@@ -0,0 +1,180 @@
++/* Ayomide Studio — cloud sync client (works with server/index.js — your own deployment) */
++import { $, toast, emit, on, fmtBytes } from './utils.js';
++import { kvGet, kvSet, allFiles, putFileRec, allChat, putChatRow } from './db.js';
++
++let cfg = null;
++let syncing = false;
++let autoTimer = null;
++const MAX_SYNC_FILE = 100 * 1024 * 1024; // 100MB
++
++async function api(path, opts = {}, { raw = false } = {}) {
++  const base = (cfg.url || '').replace(/\/+$/, '');
++  const res = await fetch(base + path, {
++    ...opts,
++    headers: {
++      ...(opts.body && !raw ? { 'Content-Type': 'application/json' } : {}),
++      ...(cfg.token ? { Authorization: 'Bearer ' + cfg.token } : {}),
++      ...(opts.headers || {})
++    }
++  });
++  if (res.status === 401) throw new Error('Session expired — sign in again');
++  if (!res.ok) {
++    let msg = `HTTP ${res.status}`;
++    try { msg = (await res.json()).error || msg; } catch { }
++    throw new Error(msg);
++  }
++  return res;
++}
++
++export async function initSyncUI() {
++  cfg = await kvGet('sync', {});
++  if (cfg.url) $('#sync-url').value = cfg.url;
++  else if (typeof window !== 'undefined' && window.location?.protocol?.startsWith('http') && !window.location.hostname.endsWith('github.io')) {
++    $('#sync-url').value = window.location.origin; // when the app is served by its own sync server
++  }
++  if (cfg.email) $('#sync-email').value = cfg.email;
++  updateState();
++
++  $('#sync-signin').addEventListener('click', () => auth(false));
++  $('#sync-register').addEventListener('click', () => auth(true));
++  $('#sync-out').addEventListener('click', async () => {
++    cfg = { url: cfg.url };
++    await kvSet('sync', cfg);
++    updateState();
++    toast('Signed out of sync', 'ok');
++  });
++  $('#sync-now').addEventListener('click', () => syncNow(false));
++
++  // auto-sync (debounced) whenever local data changes
++  on('files:changed', () => {
++    if (!cfg?.token || !navigator.onLine) return;
++    clearTimeout(autoTimer);
++    autoTimer = setTimeout(() => syncNow(true), 8000);
++  });
++  if (cfg?.token && navigator.onLine) setTimeout(() => syncNow(true), 1500);
++}
++
++async function auth(register) {
++  const url = $('#sync-url').value.trim();
++  const email = $('#sync-email').value.trim();
++  const password = $('#sync-pass').value;
++  if (!url || !email || !password) { toast('Fill in server URL, email and password.', 'warn'); return; }
++  if (password.length < 6) { toast('Password must be at least 6 characters.', 'warn'); return; }
++  const prev = cfg;
++  cfg = { url, email, token: null, lastSync: null };
++  try {
++    const res = await api('/api/auth/' + (register ? 'register' : 'login'), {
++      method: 'POST',
++      body: JSON.stringify({ email, password })
++    });
++    const data = await res.json();
++    cfg.token = data.token;
++    await kvSet('sync', cfg);
++    $('#sync-pass').value = '';
++    updateState();
++    toast(register ? 'Account created 🎉' : 'Signed in ✅', 'ok');
++    await syncNow(false);
++  } catch (err) {
++    cfg = prev;
++    toast((register ? 'Sign-up failed: ' : 'Sign-in failed: ') + err.message, 'error', 6000);
++  }
++}
++
++function updateState() {
++  const on = !!(cfg?.token);
++  $('#sync-badge').textContent = on ? (cfg.email || 'On') : 'Off';
++  $('#sync-badge').classList.toggle('ext', on);
++  $('#sync-now').hidden = !on;
++  $('#sync-out').hidden = !on;
++  $('#sync-signin').hidden = on;
++  $('#sync-register').hidden = on;
++  $('#sync-status').textContent = on
++    ? `Signed in as ${cfg.email} · last sync ${cfg.lastSync ? new Date(cfg.lastSync).toLocaleString() : 'never'}`
++    : 'Not connected.';
++}
++
++export async function syncNow(silent = true) {
++  if (!cfg?.token || syncing) return;
++  if (!navigator.onLine) return;
++  syncing = true;
++  let pushed = 0, pulled = 0, chats = 0, skipped = 0;
++  try {
++    const [localFiles, remoteRes] = await Promise.all([
++      allFiles(),
++      api('/api/files').then((r) => r.json())
++    ]);
++    const remote = new Map((remoteRes.files || []).map((f) => [f.id, f]));
++
++    // push newer local files
++    for (const lf of localFiles) {
++      const rf = remote.get(lf.id);
++      if (rf && (rf.updated || 0) >= (lf.updated || lf.addedAt || 0)) continue;
++      if ((lf.size || 0) > MAX_SYNC_FILE) { skipped++; continue; }
++      const q = new URLSearchParams({
++        name: lf.name || 'file',
++        type: lf.type || '',
++        addedAt: String(lf.addedAt || Date.now()),
++        updated: String(lf.updated || lf.addedAt || Date.now()),
++        folder: lf.folder || 'root',
++        tags: (lf.tags || []).join(','),
++        vault: lf.vault ? '1' : '0',
++        iv: lf.iv || ''
++      });
++      await api('/api/files/' + encodeURIComponent(lf.id) + '?' + q.toString(), {
++        method: 'PUT',
++        body: lf.blob
++      }, { raw: true });
++      pushed++;
++    }
++
++    // pull newer remote files
++    for (const rf of remoteRes.files || []) {
++      const lf = localFiles.find((f) => f.id === rf.id);
++      if (lf && (lf.updated || lf.addedAt || 0) >= (rf.updated || 0)) continue;
++      const res = await api('/api/files/' + encodeURIComponent(rf.id) + '/blob');
++      const blob = await res.blob();
++      await putFileRec({
++        id: rf.id,
++        name: rf.name,
++        type: rf.type,
++        size: blob.size,
++        addedAt: rf.addedAt,
++        updated: rf.updated,
++        folder: rf.folder || 'root',
++        tags: rf.tags || [],
++        hash: null,
++        vault: !!rf.vault,
++        iv: rf.iv || null,
++        blob
++      });
++      pulled++;
++    }
++
++    // chat merge (union by id)
++    const remoteChat = await api('/api/chat').then((r) => r.json());
++    const remoteRows = remoteChat.rows || [];
++    const localRows = await allChat();
++    const localIds = new Set(localRows.map((r) => r.id));
++    const remoteIds = new Set(remoteRows.map((r) => r.id));
++    const toPush = localRows.filter((r) => !remoteIds.has(r.id));
++    if (toPush.length) {
++      await api('/api/chat', { method: 'PUT', body: JSON.stringify({ rows: toPush }) });
++    }
++    for (const r of remoteRows) {
++      if (!localIds.has(r.id)) { await putChatRow(r); chats++; }
++    }
++
++    cfg.lastSync = Date.now();
++    await kvSet('sync', cfg);
++    updateState();
++    emit('files:changed');
++    if (!silent || pushed || pulled || chats) {
++      toast(`Synced ☁️ — ${pushed} up, ${pulled} down, ${chats} chat in${skipped ? `, ${skipped} skipped (too big)` : ''}`, 'ok', 5000);
++    }
++  } catch (err) {
++    if (!silent) toast('Sync failed: ' + err.message, 'error', 6000);
++    $('#sync-status').textContent = 'Sync error: ' + err.message;
++  } finally {
++    syncing = false;
++  }
++}
+diff --git a/js/utils.js b/js/utils.js
+index 2aef60d..90cd803 100644
+--- a/js/utils.js
+@@ -126,6 +126,7 @@ export function isText(t, name) {
+ 
+ export function fileIcon(rec) {
+   const t = rec.type || '', n = rec.name || '';
++  if (rec.vault) return '🔒';
+   if (isImage(t)) return '🖼️';
+   if (isVideo(t)) return '🎬';
+   if (isAudio(t)) return '🎵';
+@@ -170,6 +171,57 @@ export function blobToDataURL(blob) {
+   });
+ }
+ 
++/* ---------- crypto (vault / lock) ---------- */
++export function randomHex(bytes = 16) {
++  const a = new Uint8Array(bytes);
++  crypto.getRandomValues(a);
++  return [...a].map((b) => b.toString(16).padStart(2, '0')).join('');
++}
++
++export async function sha256Hex(str) {
++  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
++  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
++}
++
++export async function sha1Blob(blob) {
++  const d = await crypto.subtle.digest('SHA-1', await blob.arrayBuffer());
++  return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
++}
++
++export async function deriveKey(pin, saltHex) {
++  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
++  return crypto.subtle.deriveKey(
++    { name: 'PBKDF2', salt: Uint8Array.from(saltHex.match(/../g).map((h) => parseInt(h, 16))), iterations: 150000, hash: 'SHA-256' },
++    base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
++  );
++}
++
++export async function encryptBlob(blob, key) {
++  const iv = crypto.getRandomValues(new Uint8Array(12));
++  const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, await blob.arrayBuffer());
++  return { blob: new Blob([data], { type: 'application/octet-stream' }), ivHex: [...iv].map((b) => b.toString(16).padStart(2, '0')).join('') };
++}
++
++export async function decryptBlob(encBlob, key, ivHex) {
++  const iv = Uint8Array.from(ivHex.match(/../g).map((h) => parseInt(h, 16)));
++  const data = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, await encBlob.arrayBuffer());
++  return new Blob([data]);
++}
++
++/* ---------- speech ---------- */
++const EMOJI_RE = /[\p{Extended_Pictographic}\u2190-\u21FF\u2600-\u27BF\uFE0F]/gu;
++export function speak(text) {
++  try {
++    if (!('speechSynthesis' in window)) return false;
++    speechSynthesis.cancel();
++    const u = new SpeechSynthesisUtterance(String(text).replace(EMOJI_RE, ' ').replace(/\s+/g, ' ').slice(0, 1200));
++    u.rate = 1.02;
++    speechSynthesis.speak(u);
++    return true;
++  } catch { return false; }
++}
++export function stopSpeak() { try { speechSynthesis?.cancel(); } catch { /* noop */ } }
++
+ /* safe arithmetic evaluation for the assistant */
+ export function safeMath(expr) {
+   if (!/^[\d\s+\-*/().%]+$/.test(expr) || !/\d/.test(expr) || !/[+\-*/%]/.test(expr)) return null;
+diff --git a/js/vault.js b/js/vault.js
+new file mode 100644
+index 0000000..71fdb3f
+--- /dev/null
+@@ -0,0 +1,37 @@
++/* Ayomide Studio — app-lock & encrypted vault state */
++import { kvGet, kvSet } from './db.js';
++import { sha256Hex, deriveKey, randomHex } from './utils.js';
++
++let vaultKey = null; // CryptoKey in memory after unlock
++
++export const vaultReady = () => !!vaultKey;
++export const getVaultKey = () => vaultKey;
++export const setVaultKey = (k) => { vaultKey = k; };
++
++export async function lockConfig() { return kvGet('lock', null); }
++
++export async function setupLock(pin) {
++  const salt = randomHex(16);
++  const vaultSalt = randomHex(16);
++  await kvSet('lock', {
++    salt,
++    vaultSalt,
++    pinHash: await sha256Hex(pin + salt)
++  });
++}
++
++export async function disableLock() { await kvSet('lock', null); vaultKey = null; }
++
++export async function verifyPin(pin) {
++  const cfg = await lockConfig();
++  if (!cfg) return false;
++  return (await sha256Hex(pin + cfg.salt)) === cfg.pinHash;
++}
++
++export async function unlockVault(pin) {
++  const cfg = await lockConfig();
++  if (!cfg) throw new Error('Lock is not enabled');
++  if (!(await verifyPin(pin))) throw new Error('Wrong PIN');
++  vaultKey = await deriveKey(pin, cfg.vaultSalt);
++  return vaultKey;
++}
+diff --git a/js/video.js b/js/video.js
+index 1914102..916ba32 100644
+--- a/js/video.js
+@@ -1,7 +1,7 @@
+-/* Ayomide Studio — image → video (canvas + MediaRecorder, Ken Burns motion & fades) */
+-import { $, $$, uid, toast, download, loadImage, fmtBytes } from './utils.js';
++/* Ayomide Studio — image → video: motion, fades, music, titles (canvas + MediaRecorder + WebAudio) */
++import { $, uid, toast, download, loadImage, fmtBytes, emit } from './utils.js';
+ import { addFile, getFile } from './db.js';
+-import { pickImages, refresh as refreshFiles } from './files.js';
++import { pickImages, pickAudio, refresh as refreshFiles } from './files.js';
+ 
+ const EFFECTS = {
+   'none': 'No motion',
+@@ -11,8 +11,9 @@ const EFFECTS = {
+   'pan-right': 'Pan right'
+ };
+ 
+-let clips = [];       // {id, name, blob, img, dur, effect}
+-let lastResult = null; // {blob, ext, info}
++let clips = [];         // {id, name, blob, img, dur, effect, title:{text,pos,color,size,anim}|null}
++let audioTrack = null;  // {name, blob, volume}
++let lastResult = null;
+ let rendering = false;
+ 
+ const canvas = () => $('#video-canvas');
+@@ -27,6 +28,20 @@ export async function init() {
+     e.target.value = '';
+   });
+ 
++  // music
++  $('#vid-audio-pick').addEventListener('click', async () => {
++    const rec = await pickAudio();
++    if (rec) setAudio(rec.blob, rec.name);
++  });
++  $('#vid-audio-upload').addEventListener('click', () => $('#vid-audio-input').click());
++  $('#vid-audio-input').addEventListener('change', (e) => {
++    const f = e.target.files[0];
++    e.target.value = '';
++    if (f) setAudio(f, f.name);
++  });
++  $('#vid-audio-vol').addEventListener('input', (e) => { if (audioTrack) audioTrack.volume = parseFloat(e.target.value); });
++  $('#vid-audio-remove').addEventListener('click', () => { audioTrack = null; $('#vid-audio-row').hidden = true; });
++
+   $('#vid-res').addEventListener('change', previewFirstFrame);
+   $('#vid-bg').addEventListener('input', previewFirstFrame);
+   $('#vid-fade').addEventListener('input', (e) => { $('#vid-fade-val').textContent = (+e.target.value).toFixed(1) + 's'; });
+@@ -47,6 +62,13 @@ export async function init() {
+   syncUI();
+ }
+ 
++function setAudio(blob, name) {
++  audioTrack = { name, blob, volume: parseFloat($('#vid-audio-vol').value) || 0.8 };
++  $('#vid-audio-name').textContent = '🎵 ' + name;
++  $('#vid-audio-row').hidden = false;
++  toast('Music added — it will be mixed into the video 🎵', 'ok');
++}
++
+ async function pick() {
+   const recs = await pickImages({ multiple: true, title: 'Add images as video clips' });
+   await addFileIds(recs.map((r) => r.id));
+@@ -71,7 +93,8 @@ async function addBlob(blob, name) {
+     clips.push({
+       id: uid(), name: name || 'image', blob, img,
+       dur: clips.length ? 4 : 5,
+-      effect: 'zoom-in'
++      effect: 'zoom-in',
++      title: null
+     });
+     syncUI();
+     previewFirstFrame();
+@@ -97,8 +120,10 @@ function syncUI() {
+   clips.forEach((c, i) => {
+     const li = document.createElement('li');
+     li.className = 'clip-item';
++    li.style.flexWrap = 'wrap';
+     const opts = Object.entries(EFFECTS).map(([k, v]) =>
+       `<option value="${k}" ${c.effect === k ? 'selected' : ''}>${v}</option>`).join('');
++    const t = c.title || {};
+     li.innerHTML = `
+       <img src="${c.img.src}" alt="">
+       <div class="clip-info">
+@@ -111,7 +136,25 @@ function syncUI() {
+       <div class="clip-btns">
+         <button data-up title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button>
+         <button data-down title="Move down" ${i === clips.length - 1 ? 'disabled' : ''}>▼</button>
++        <button data-title title="Add a text title">🅣</button>
+         <button data-del title="Remove">✕</button>
++      </div>
++      <div class="title-editor" data-title-editor hidden>
++        <input type="text" data-title-text placeholder="Title text (e.g. Lagos Nights ✨)" value="${t.text || ''}">
++        <div class="row">
++          <select data-title-pos>
++            <option value="top" ${t.pos === 'top' ? 'selected' : ''}>Top</option>
++            <option value="center" ${t.pos === 'center' ? 'selected' : ''}>Center</option>
++            <option value="bottom" ${!t.pos || t.pos === 'bottom' ? 'selected' : ''}>Bottom</option>
++          </select>
++          <select data-title-anim>
++            <option value="fade" ${!t.anim || t.anim === 'fade' ? 'selected' : ''}>Fade in</option>
++            <option value="slide-up" ${t.anim === 'slide-up' ? 'selected' : ''}>Slide up</option>
++            <option value="none" ${t.anim === 'none' ? 'selected' : ''}>Static</option>
++          </select>
++          <input type="color" data-title-color value="${t.color || '#ffffff'}" title="Colour">
++          <label class="inline">Size <input type="range" min="24" max="120" value="${t.size || 52}" data-title-size></label>
++        </div>
+       </div>`;
+     li.querySelector('[data-effect]').addEventListener('change', (e) => { c.effect = e.target.value; previewFirstFrame(); });
+     li.querySelector('[data-dur]').addEventListener('change', (e) => {
+@@ -121,13 +164,26 @@ function syncUI() {
+     li.querySelector('[data-up]').addEventListener('click', () => { if (i > 0) { [clips[i - 1], clips[i]] = [clips[i], clips[i - 1]]; syncUI(); previewFirstFrame(); } });
+     li.querySelector('[data-down]').addEventListener('click', () => { if (i < clips.length - 1) { [clips[i + 1], clips[i]] = [clips[i], clips[i + 1]]; syncUI(); previewFirstFrame(); } });
+     li.querySelector('[data-del]').addEventListener('click', () => { clips.splice(i, 1); syncUI(); previewFirstFrame(); });
++
++    const tBtn = li.querySelector('[data-title]');
++    const tEd = li.querySelector('[data-title-editor]');
++    tBtn.addEventListener('click', () => {
++      if (!c.title) c.title = { text: '', pos: 'bottom', color: '#ffffff', size: 52, anim: 'fade' };
++      tEd.hidden = !tEd.hidden;
++    });
++    tEd.querySelector('[data-title-text]').addEventListener('input', (e) => { c.title.text = e.target.value; previewFirstFrame(); });
++    tEd.querySelector('[data-title-pos]').addEventListener('change', (e) => { c.title.pos = e.target.value; previewFirstFrame(); });
++    tEd.querySelector('[data-title-anim]').addEventListener('change', (e) => { c.title.anim = e.target.value; previewFirstFrame(); });
++    tEd.querySelector('[data-title-color]').addEventListener('input', (e) => { c.title.color = e.target.value; previewFirstFrame(); });
++    tEd.querySelector('[data-title-size]').addEventListener('input', (e) => { c.title.size = +e.target.value; previewFirstFrame(); });
++
+     list.appendChild(li);
+   });
+ 
+   const total = clips.reduce((n, c) => n + c.dur, 0);
+   $('#btn-render').disabled = !clips.length || rendering;
+   $('#btn-render').textContent = clips.length
+-    ? `🎬 Render video (${total.toFixed(1)}s)`
++    ? `🎬 Render video (${total.toFixed(1)}s${audioTrack ? ' + 🎵' : ''})`
+     : '🎬 Render video';
+ }
+ 
+@@ -142,6 +198,9 @@ function previewFirstFrame() {
+   const c = canvas();
+   c.width = W; c.height = H;
+   drawFrame(0, W, H);
++  // show first-clip title in preview
++  const ctx = c.getContext('2d');
++  drawTitle(ctx, clips[0], W, H, clips[0].dur / 2, 1);
+ }
+ 
+ /* ---------- drawing ---------- */
+@@ -162,6 +221,34 @@ function drawClipFrame(ctx, clip, W, H, p) {
+   ctx.drawImage(img, (W - dw) / 2 + ox * overX, (H - dh) / 2 + oy * overY, dw, dh);
+ }
+ 
++function drawTitle(ctx, clip, W, H, local, baseAlpha) {
++  const t = clip.title;
++  if (!t || !t.text) return;
++  const fs = Math.round((t.size || 52) * H / 1080);
++  ctx.save();
++  ctx.font = `700 ${fs}px -apple-system, "Segoe UI", Roboto, sans-serif`;
++  ctx.textAlign = 'center';
++  const pad = H * 0.08;
++  const pos = t.pos || 'bottom';
++  let y = pos === 'top' ? pad : pos === 'center' ? H / 2 : H - pad;
++  ctx.textBaseline = pos === 'top' ? 'top' : pos === 'center' ? 'middle' : 'alphabetic';
++  let alpha = baseAlpha, dy = 0;
++  const anim = t.anim || 'fade';
++  if (anim !== 'none') {
++    const inR = Math.min(1, local / 0.6);
++    const outR = Math.min(1, Math.max(0, (clip.dur - local)) / 0.6);
++    const ramp = Math.max(0, Math.min(inR, outR));
++    alpha *= ramp;
++    if (anim === 'slide-up') dy = (1 - ramp) * fs * 0.8;
++  }
++  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
++  ctx.shadowColor = 'rgba(0,0,0,.6)';
++  ctx.shadowBlur = fs * 0.3;
++  ctx.fillStyle = t.color || '#ffffff';
++  ctx.fillText(t.text, W / 2, y + dy);
++  ctx.restore();
++}
++
+ function drawFrame(t, W, H) {
+   const ctx = canvas().getContext('2d');
+   ctx.fillStyle = $('#vid-bg').value || '#0b0d14';
+@@ -188,11 +275,17 @@ function drawFrame(t, W, H) {
+   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+   drawClipFrame(ctx, c, W, H, c.dur ? local / c.dur : 0);
+   ctx.globalAlpha = 1;
++  drawTitle(ctx, c, W, H, local, alpha);
+ }
+ 
+ /* ---------- recorder ---------- */
+-function pickMime() {
+-  const cands = [
++function pickMime(hasAudio) {
++  const cands = hasAudio ? [
++    ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'mp4'],
++    ['video/webm;codecs=vp9,opus', 'webm'],
++    ['video/webm;codecs=vp8,opus', 'webm'],
++    ['video/webm', 'webm']
++  ] : [
+     ['video/mp4;codecs=avc1.42E01E', 'mp4'],
+     ['video/mp4', 'mp4'],
+     ['video/webm;codecs=vp9', 'webm'],
+@@ -209,7 +302,8 @@ function pickMime() {
+ export async function startRender() {
+   if (rendering) return;
+   if (!clips.length) { toast('Add at least one image first 🖼️', 'warn'); return; }
+-  const pick = pickMime();
++  const hasAudio = !!audioTrack;
++  const pick = pickMime(hasAudio);
+   if (!pick) { toast('This browser cannot record video (MediaRecorder unsupported).', 'error'); return; }
+ 
+   rendering = true;
+@@ -226,13 +320,40 @@ export async function startRender() {
+   c.width = W; c.height = H;
+   drawFrame(0, W, H);
+ 
+-  const stream = c.captureStream(fps);
++  const videoStream = c.captureStream(fps);
++  let stream = videoStream;
++
++  // audio setup
++  let audioCtx = null, audioSrc = null;
++  if (hasAudio) {
++    try {
++      const AC = window.AudioContext || window.webkitAudioContext;
++      audioCtx = new AC();
++      const buf = await audioCtx.decodeAudioData(await audioTrack.blob.arrayBuffer());
++      const dest = audioCtx.createMediaStreamDestination();
++      audioSrc = audioCtx.createBufferSource();
++      audioSrc.buffer = buf;
++      audioSrc.loop = true;
++      const gain = audioCtx.createGain();
++      gain.gain.value = audioTrack.volume;
++      audioSrc.connect(gain).connect(dest);
++      audioSrc.start();
++      stream = new MediaStream([...videoStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
++    } catch (err) {
++      toast('Could not decode the audio — rendering without music.', 'warn');
++      stream = videoStream;
++      hasAudioFailedStop(audioCtx, audioSrc);
++      audioCtx = null; audioSrc = null;
++    }
++  }
++
+   let rec;
+   try {
+-    rec = new MediaRecorder(stream, { mimeType: pick.mime, videoBitsPerSecond: 8_000_000 });
++    rec = new MediaRecorder(stream, { mimeType: pick.mime, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 160_000 });
+   } catch (err) {
+     toast('Could not start the recorder: ' + err.message, 'error');
+     rendering = false;
++    cleanupAudio();
+     syncUI();
+     return;
+   }
+@@ -260,6 +381,7 @@ export async function startRender() {
+   rec.stop();
+   await stopped;
+   stream.getTracks().forEach((t) => t.stop());
++  cleanupAudio();
+ 
+   $('#video-progress').style.width = '100%';
+   $('#video-progress-wrap').hidden = true;
+@@ -275,15 +397,25 @@ export async function startRender() {
+ 
+   lastResult = {
+     blob, ext: pick.ext,
+-    info: `${W}×${H} · ${fps}fps · ${total.toFixed(1)}s · ${fmtBytes(blob.size)} · .${pick.ext}`
++    info: `${W}×${H} · ${fps}fps · ${total.toFixed(1)}s${hasAudio ? ' · 🎵' : ''} · ${fmtBytes(blob.size)} · .${pick.ext}`
+   };
+   $('#video-player').src = URL.createObjectURL(blob);
+   $('#video-stage').hidden = true;
+   $('#video-result').hidden = false;
+-  $('#vid-info').textContent = lastResult.info + ' — saved nowhere yet. Save to Files or download to keep it!';
++  $('#vid-info').textContent = lastResult.info + ' — save it or download to keep it!';
+   toast('Video ready! 🎬', 'ok', 5000);
+   rendering = false;
+   syncUI();
++
++  function cleanupAudio() {
++    try { audioSrc?.stop(); } catch { }
++    try { audioCtx?.close(); } catch { }
++  }
++}
++
++function hasAudioFailedStop(ctx, src) {
++  try { src?.stop(); } catch { }
++  try { ctx?.close(); } catch { }
+ }
+ 
+ async function saveResult() {
+diff --git a/manifest.webmanifest b/manifest.webmanifest
+index 23d6949..2182263 100644
+--- a/manifest.webmanifest
+@@ -1,7 +1,7 @@
+ {
+   "name": "Ayomide Studio",
+   "short_name": "Ayomide",
+-  "description": "Chat, upload & edit files, and turn images into videos — an offline-capable Progressive Web App.",
++  "description": "Chat, upload & edit files, turn images into videos, sync across devices — an offline-capable Progressive Web App.",
+   "id": "./",
+   "start_url": "./",
+   "scope": "./",
+@@ -10,6 +10,34 @@
+   "background_color": "#0b0d14",
+   "theme_color": "#0b0d14",
+   "categories": ["productivity", "photo", "utilities"],
++  "launch_handler": { "client_mode": "focus-existing" },
++  "share_target": {
++    "action": "./?share-target=1",
++    "method": "POST",
++    "enctype": "multipart/form-data",
++    "params": {
++      "title": "title",
++      "text": "text",
++      "url": "url",
++      "files": [
++        { "name": "files", "accept": ["image/*", "video/*", "audio/*", "text/*", "application/pdf"] },
++        { "name": "media", "accept": ["image/*", "video/*"] }
++      ]
++    }
++  },
++  "file_handlers": [
++    {
++      "action": "./",
++      "accept": {
++        "image/*": [".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".svg"]
++      },
++      "icons": [
++        { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
++        { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
++      ],
++      "launch_type": "single-client"
++    }
++  ],
+   "icons": [
+     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+diff --git a/render.yaml b/render.yaml
+new file mode 100644
+index 0000000..c7f7c77
+--- /dev/null
+@@ -0,0 +1,16 @@
++# One-click deploy of the Ayomide Studio sync server (+ site) to Render:
++#   1. Push this repo to GitHub
++#   2. Open https://render.com/deploy and paste your repo URL (or use the button in the README)
++# Note: Render's free plan has an ephemeral filesystem — data resets on redeploy.
++# For persistent storage use Railway or Fly.io with a volume, or a paid Render disk.
++services:
++  - type: web
++    name: ayomide-studio
++    runtime: node
++    plan: free
++    buildCommand: echo "no build needed"
++    startCommand: node server/index.js
++    healthCheckPath: /api/health
++    envVars:
++      - key: NODE_VERSION
++        value: 20
+diff --git a/server/index.js b/server/index.js
+new file mode 100644
+index 0000000..d20a873
+--- /dev/null
+@@ -0,0 +1,284 @@
++/* Ayomide Studio — sync server (zero dependencies, pure Node)
++ *
++ * Endpoints (all under /api, JSON unless noted):
++ *   POST /api/auth/register {email,password}   -> {token}
++ *   POST /api/auth/login    {email,password}   -> {token}
++ *   GET  /api/me                              -> {email}
++ *   GET  /api/files                           -> {files:[{id,name,type,size,addedAt,updated,folder,tags,vault,iv}]}
++ *   PUT  /api/files/:id?name=&type=... (body = raw bytes)
++ *   GET  /api/files/:id/blob                  -> raw bytes
++ *   DELETE /api/files/:id
++ *   GET  /api/chat                            -> {rows:[...]}
++ *   PUT  /api/chat {rows:[...]}               -> merges by id
++ *   GET  /api/health                          -> {ok:true}
++ *
++ * Also serves the PWA static files from the repo root, so ONE deployment
++ * gives you both the app and its sync backend at the same URL.
++ *
++ * Storage: JSON metadata + blobs on disk under DATA_DIR (default ./data).
++ * NOTE: on Render's free plan the filesystem is ephemeral — fine for testing.
++ * For persistence use Railway/Fly.io with a volume, or a paid Render disk.
++ */
++import http from 'node:http';
++import fs from 'node:fs';
++import fsp from 'node:fs/promises';
++import path from 'node:path';
++import crypto from 'node:crypto';
++import { fileURLToPath } from 'node:url';
++
++const __dirname = path.dirname(fileURLToPath(import.meta.url));
++const ROOT = path.resolve(__dirname, '..');          // repo root (static site)
++const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
++const PORT = process.env.PORT || 3000;
++const MAX_BODY = 110 * 1024 * 1024;                   // 110MB
++const QUOTA = 500 * 1024 * 1024;                      // 500MB per user
++
++/* ---------- tiny JSON db ---------- */
++const dbFile = path.join(DATA_DIR, 'db.json');
++let db = { users: {}, files: {}, chat: {}, secret: null };
++
++function saveDb() {
++  fs.mkdirSync(DATA_DIR, { recursive: true });
++  const tmp = dbFile + '.tmp';
++  fs.writeFileSync(tmp, JSON.stringify(db));
++  fs.renameSync(tmp, dbFile);
++}
++if (fs.existsSync(dbFile)) {
++  try { db = { ...db, ...JSON.parse(fs.readFileSync(dbFile, 'utf8')) }; } catch { /* fresh */ }
++}
++if (!db.secret) { db.secret = crypto.randomBytes(32).toString('hex'); saveDb(); }
++
++const blobDir = (uid) => path.join(DATA_DIR, 'blobs', uid);
++const blobPath = (uid, fid) => path.join(blobDir(uid), fid);
++
++/* ---------- auth ---------- */
++function hashPassword(password, salt) {
++  return crypto.scryptSync(password, salt, 64).toString('hex');
++}
++function sign(payload) {
++  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
++  const sig = crypto.createHmac('sha256', db.secret).update(body).digest('base64url');
++  return `${body}.${sig}`;
++}
++function verifyToken(token) {
++  if (!token || typeof token !== 'string') return null;
++  const [body, sig] = token.split('.');
++  if (!body || !sig) return null;
++  const expect = crypto.createHmac('sha256', db.secret).update(body).digest('base64url');
++  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect))) return null;
++  try {
++    const p = JSON.parse(Buffer.from(body, 'base64url').toString());
++    if (p.exp < Date.now()) return null;
++    return p;
++  } catch { return null; }
++}
++function auth(req) {
++  const h = req.headers.authorization || '';
++  const payload = verifyToken(h.startsWith('Bearer ') ? h.slice(7) : null);
++  if (!payload) return null;
++  return db.users[payload.uid] ? payload.uid : null;
++}
++
++/* ---------- helpers ---------- */
++const MIME = {
++  '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
++  '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
++  '.json': 'application/json', '.webmanifest': 'application/manifest+json',
++  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml',
++  '.ico': 'image/x-icon', '.txt': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8',
++  '.woff2': 'font/woff2', '.zip': 'application/zip', '.webm': 'video/webm', '.mp4': 'video/mp4'
++};
++
++function send(res, status, data, headers = {}) {
++  const body = typeof data === 'string' || Buffer.isBuffer(data) ? data : JSON.stringify(data);
++  res.writeHead(status, {
++    'Access-Control-Allow-Origin': '*',
++    'Access-Control-Allow-Methods': 'GET,PUT,POST,DELETE,OPTIONS',
++    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
++    ...(typeof data === 'string' || Buffer.isBuffer(data) ? {} : { 'Content-Type': 'application/json' }),
++    ...headers
++  });
++  res.end(body);
++}
++
++function readBody(req, limit = MAX_BODY) {
++  return new Promise((resolve, reject) => {
++    const chunks = [];
++    let size = 0;
++    req.on('data', (c) => {
++      size += c.length;
++      if (size > limit) { reject(new Error('Payload too large')); req.destroy(); return; }
++      chunks.push(c);
++    });
++    req.on('end', () => resolve(Buffer.concat(chunks)));
++    req.on('error', reject);
++  });
++}
++
++async function readJson(req) {
++  const buf = await readBody(req, 1024 * 1024);
++  try { return JSON.parse(buf.toString() || '{}'); } catch { return {}; }
++}
++
++function userQuotaUsed(uid) {
++  return Object.values(db.files[uid] || {}).reduce((n, f) => n + (f.size || 0), 0);
++}
++
++/* ---------- static files ---------- */
++function serveStatic(req, res, pathname) {
++  let rel = decodeURIComponent(pathname);
++  if (rel === '/' || rel === '') rel = '/index.html';
++  const file = path.normalize(path.join(ROOT, rel));
++  if (!file.startsWith(ROOT)) return send(res, 403, { error: 'Forbidden' });
++  fs.stat(file, (err, st) => {
++    if (err || !st.isFile()) {
++      // SPA fallback for non-API GETs
++      if (!rel.startsWith('/api') && !path.extname(rel)) {
++        return serveStatic(req, res, '/index.html');
++      }
++      return send(res, 404, { error: 'Not found' });
++    }
++    const ext = path.extname(file).toLowerCase();
++    const stream = fs.createReadStream(file);
++    res.writeHead(200, {
++      'Content-Type': MIME[ext] || 'application/octet-stream',
++      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=3600',
++      'Access-Control-Allow-Origin': '*'
++    });
++    stream.pipe(res);
++  });
++}
++
++/* ---------- API router ---------- */
++async function handleApi(req, res, url) {
++  const parts = url.pathname.split('/').filter(Boolean); // ['api', ...]
++  const route = parts.slice(1);
++
++  if (req.method === 'OPTIONS') return send(res, 204, '');
++
++  if (route[0] === 'health') return send(res, 200, { ok: true, name: 'ayomide-sync' });
++
++  if (route[0] === 'auth' && (route[1] === 'register' || route[1] === 'login')) {
++    const { email, password } = await readJson(req);
++    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return send(res, 400, { error: 'Valid email required' });
++    if (!password || password.length < 6) return send(res, 400, { error: 'Password must be at least 6 characters' });
++    const key = email.toLowerCase();
++    if (route[1] === 'register') {
++      if (db.users[key]) return send(res, 409, { error: 'Account already exists — sign in instead' });
++      const salt = crypto.randomBytes(16).toString('hex');
++      db.users[key] = { email: key, salt, hash: hashPassword(password, salt), created: Date.now() };
++      db.files[key] = db.files[key] || {};
++      db.chat[key] = db.chat[key] || {};
++      saveDb();
++    } else {
++      const u = db.users[key];
++      if (!u || hashPassword(password, u.salt) !== u.hash) return send(res, 401, { error: 'Wrong email or password' });
++    }
++    const uid = key;
++    const token = sign({ uid, exp: Date.now() + 1000 * 60 * 60 * 24 * 90 });
++    return send(res, 200, { token, email: uid });
++  }
++
++  const uid = auth(req);
++  if (!uid) return send(res, 401, { error: 'Unauthorized' });
++
++  if (route[0] === 'me') return send(res, 200, { email: uid });
++
++  if (route[0] === 'files') {
++    db.files[uid] = db.files[uid] || {};
++    const fid = route[1] && decodeURIComponent(route[1]);
++
++    if (req.method === 'GET' && !fid) {
++      const files = Object.values(db.files[uid]).map(({ blobFile, ...meta }) => meta);
++      return send(res, 200, { files });
++    }
++
++    if (!fid || !/^[A-Za-z0-9_-]{1,80}$/.test(fid)) return send(res, 400, { error: 'Bad file id' });
++
++    if (req.method === 'PUT') {
++      const q = url.searchParams;
++      const buf = await readBody(req);
++      if (!buf.length) return send(res, 400, { error: 'Empty body' });
++      const existing = db.files[uid][fid];
++      if (!existing && userQuotaUsed(uid) + buf.length > QUOTA) {
++        return send(res, 413, { error: 'Storage quota exceeded (500MB)' });
++      }
++      fs.mkdirSync(blobDir(uid), { recursive: true });
++      await fsp.writeFile(blobPath(uid, fid), buf);
++      db.files[uid][fid] = {
++        id: fid,
++        name: q.get('name') || 'file',
++        type: q.get('type') || '',
++        size: buf.length,
++        addedAt: +(q.get('addedAt') || Date.now()),
++        updated: +(q.get('updated') || Date.now()),
++        folder: q.get('folder') || 'root',
++        tags: (q.get('tags') || '').split(',').filter(Boolean),
++        vault: q.get('vault') === '1',
++        iv: q.get('iv') || ''
++      };
++      saveDb();
++      return send(res, 200, { ok: true, id: fid });
++    }
++
++    if (req.method === 'GET' && route[2] === 'blob') {
++      const meta = db.files[uid][fid];
++      if (!meta) return send(res, 404, { error: 'Not found' });
++      try {
++        const buf = await fsp.readFile(blobPath(uid, fid));
++        return send(res, 200, buf, { 'Content-Type': meta.type || 'application/octet-stream' });
++      } catch {
++        return send(res, 404, { error: 'Blob missing' });
++      }
++    }
++
++    if (req.method === 'GET' && fid) {
++      const meta = db.files[uid][fid];
++      return meta ? send(res, 200, { file: meta }) : send(res, 404, { error: 'Not found' });
++    }
++
++    if (req.method === 'DELETE') {
++      if (db.files[uid][fid]) {
++        delete db.files[uid][fid];
++        fsp.unlink(blobPath(uid, fid)).catch(() => { });
++        saveDb();
++      }
++      return send(res, 200, { ok: true });
++    }
++  }
++
++  if (route[0] === 'chat') {
++    db.chat[uid] = db.chat[uid] || {};
++    if (req.method === 'GET') return send(res, 200, { rows: Object.values(db.chat[uid]) });
++    if (req.method === 'PUT') {
++      const { rows } = await readJson(req);
++      let n = 0;
++      for (const r of Array.isArray(rows) ? rows : []) {
++        if (r && r.id) { db.chat[uid][r.id] = r; n++; }
++      }
++      saveDb();
++      return send(res, 200, { ok: true, merged: n });
++    }
++  }
++
++  return send(res, 404, { error: 'Unknown API route' });
++}
++
++/* ---------- server ---------- */
++const server = http.createServer(async (req, res) => {
++  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
++  try {
++    if (url.pathname.startsWith('/api')) {
++      await handleApi(req, res, url);
++    } else {
++      serveStatic(req, res, url.pathname);
++    }
++  } catch (err) {
++    send(res, err.message === 'Payload too large' ? 413 : 500, { error: err.message || 'Server error' });
++  }
++});
++
++server.listen(PORT, '0.0.0.0', () => {
++  console.log(`Ayomide Studio sync server + static site: http://0.0.0.0:${PORT}`);
++  console.log(`Data dir: ${DATA_DIR}`);
++});
+diff --git a/server/package.json b/server/package.json
+new file mode 100644
+index 0000000..4298e71
+--- /dev/null
+@@ -0,0 +1,14 @@
++{
++  "name": "ayomide-studio-sync",
++  "version": "1.0.0",
++  "description": "Zero-dependency sync server for Ayomide Studio (auth + files + chat)",
++  "type": "module",
++  "main": "index.js",
++  "scripts": {
++    "start": "node index.js"
++  },
++  "engines": {
++    "node": ">=18"
++  },
++  "license": "MIT"
++}
+diff --git a/sw.js b/sw.js
+index add2fcc..cbbad6f 100644
+--- a/sw.js
+@@ -1,5 +1,5 @@
+-/* Ayomide Studio — Service Worker */
+-const VERSION = 'ayomide-studio-v1.0.0';
++/* Ayomide Studio — Service Worker v2 (app shell + share-target intake) */
++const VERSION = 'ayomide-studio-v2.0.0';
+ const ASSETS = [
+   './',
+   './index.html',
+@@ -13,6 +13,8 @@ const ASSETS = [
+   './js/editor.js',
+   './js/video.js',
+   './js/exporter.js',
++  './js/sync.js',
++  './js/vault.js',
+   './icons/icon-192.png',
+   './icons/icon-512.png',
+   './icons/icon-maskable-512.png',
+@@ -54,10 +56,59 @@ async function staleWhileRevalidate(request) {
+   return cached || (await network) || new Response('Offline', { status: 503, statusText: 'Offline' });
+ }
+ 
++/* ---- share-target intake: stash shared files into IndexedDB for the app ---- */
++function shareDbPut(files) {
++  return new Promise((resolve) => {
++    let done = 0;
++    const finish = () => { if (++done > files.length) resolve(); };
++    const req = indexedDB.open('ayomide-studio', 2);
++    req.onupgradeneeded = () => {
++      const d = req.result;
++      if (!d.objectStoreNames.contains('share-in')) d.createObjectStore('share-in', { keyPath: 'id' });
++    };
++    req.onsuccess = () => {
++      const db = req.result;
++      if (!db.objectStoreNames.contains('share-in')) { resolve(); return; }
++      const tx = db.transaction('share-in', 'readwrite');
++      const store = tx.objectStore('share-in');
++      files.forEach((f, i) => {
++        store.put({
++          id: 'sw-' + Date.now().toString(36) + '-' + i,
++          name: f.name || 'shared-file',
++          type: f.type || '',
++          blob: f
++        });
++      });
++      tx.oncomplete = () => resolve();
++      tx.onerror = () => resolve();
++    };
++    req.onerror = () => resolve();
++  });
++}
++
+ self.addEventListener('fetch', (event) => {
+   const { request } = event;
+-  if (request.method !== 'GET') return;
+   const url = new URL(request.url);
++
++  if (request.method === 'POST' && url.searchParams.has('share-target')) {
++    event.respondWith((async () => {
++      try {
++        const form = await request.formData();
++        const files = [...form.getAll('files'), ...form.getAll('media')].filter((f) => f && typeof f.size === 'number');
++        if (files.length) await shareDbPut(files);
++        const text = form.get('text') || form.get('title') || '';
++        if (text && !files.length) {
++          const b = new Blob([text], { type: 'text/plain' });
++          b.name = 'shared-text.txt';
++          await shareDbPut([b]);
++        }
++      } catch (e) { /* keep going */ }
++      return Response.redirect('./', 303);
++    })());
++    return;
++  }
++
++  if (request.method !== 'GET') return;
+   if (url.origin !== self.location.origin) return;
+ 
+   if (request.mode === 'navigate') {
+-- 
+2.39.5

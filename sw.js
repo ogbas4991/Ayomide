@@ -1,5 +1,5 @@
-/* Ayomide Studio — Service Worker */
-const VERSION = 'ayomide-studio-v1.0.0';
+/* Ayomide Studio — Service Worker v3 (app shell + share-target intake) */
+const VERSION = 'ayomide-studio-v3.2.1';
 const ASSETS = [
   './',
   './index.html',
@@ -13,6 +13,19 @@ const ASSETS = [
   './js/editor.js',
   './js/video.js',
   './js/exporter.js',
+  './js/sync.js',
+  './js/vault.js',
+  './js/branding.js',
+  './js/tools.js',
+  './js/palette.js',
+  './js/i18n.js',
+  './js/aiimage.js',
+  './js/actions.js',
+  './js/batch.js',
+  './js/exif.js',
+  './js/gif.js',
+  './js/pdfmake.js',
+  './js/qr.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
@@ -54,10 +67,57 @@ async function staleWhileRevalidate(request) {
   return cached || (await network) || new Response('Offline', { status: 503, statusText: 'Offline' });
 }
 
+/* ---- share-target intake: stash shared files into IndexedDB for the app ---- */
+function shareDbPut(files) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('ayomide-studio', 2);
+    req.onupgradeneeded = () => {
+      const d = req.result;
+      if (!d.objectStoreNames.contains('share-in')) d.createObjectStore('share-in', { keyPath: 'id' });
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('share-in')) { resolve(); return; }
+      const tx = db.transaction('share-in', 'readwrite');
+      const store = tx.objectStore('share-in');
+      files.forEach((f, i) => {
+        store.put({
+          id: 'sw-' + Date.now().toString(36) + '-' + i,
+          name: f.name || 'shared-file',
+          type: f.type || '',
+          blob: f
+        });
+      });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    };
+    req.onerror = () => resolve();
+  });
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-  if (request.method !== 'GET') return;
   const url = new URL(request.url);
+
+  if (request.method === 'POST' && url.searchParams.has('share-target')) {
+    event.respondWith((async () => {
+      try {
+        const form = await request.formData();
+        const files = [...form.getAll('files'), ...form.getAll('media')].filter((f) => f && typeof f.size === 'number');
+        if (files.length) await shareDbPut(files);
+        const text = form.get('text') || form.get('title') || '';
+        if (text && !files.length) {
+          const b = new Blob([text], { type: 'text/plain' });
+          b.name = 'shared-text.txt';
+          await shareDbPut([b]);
+        }
+      } catch (e) { /* keep going */ }
+      return Response.redirect('./', 303);
+    })());
+    return;
+  }
+
+  if (request.method !== 'GET') return;
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {
