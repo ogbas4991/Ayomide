@@ -100,9 +100,10 @@ async function chatTranscript() {
   return { txt: lines.join('\n'), json: JSON.stringify(rows, null, 2) };
 }
 
-/* Export every stored file + chat history + a readme */
+/* Export every stored file + chat history + a readme (vault files are skipped — they're encrypted) */
 export async function exportEverything() {
-  const files = await allFiles();
+  const files = (await allFiles()).filter((f) => !f.vault);
+  const vaultCount = (await allFiles()).length - files.length;
   const { txt, json } = await chatTranscript();
   const entries = [];
 
@@ -140,10 +141,91 @@ export async function exportEverything() {
   toast(`Exported ${files.length} file(s) + chat history`, 'ok');
 }
 
+/* Import files (and chat history) from a ZIP — handles our own exports plus regular zips */
+export async function importZip(zipBlob, { addFile, putChatRow, allChat } ) {
+  const entries = await readZip(zipBlob);
+  if (!entries.length) { toast('That ZIP appears to be empty.', 'warn'); return { files: 0, chat: 0 }; }
+
+  let fileCount = 0, chatCount = 0;
+  const existingChat = new Set((await allChat()).map((r) => r.id));
+
+  for (const e of entries) {
+    if (e.name.endsWith('/') || /(^|\/)__MACOSX\//.test(e.name) || /(^|\/)\.DS_Store$/.test(e.name)) continue;
+    let name = e.name;
+    const isOurs = /^files\//.test(name);
+    if (isOurs) name = name.replace(/^files\//, '');
+    if (/^chat\/history\.json$/.test(e.name)) {
+      try {
+        const rows = JSON.parse(await e.blob.text());
+        for (const r of rows) {
+          if (r && r.id && !existingChat.has(r.id)) { await putChatRow(r); existingChat.add(r.id); chatCount++; }
+        }
+      } catch { /* malformed history */ }
+      continue;
+    }
+    if (/^chat\//.test(e.name) || /^README\.txt$/.test(e.name)) continue;
+    if (!name) continue;
+    await addFile(e.blob, name.split('/').pop() || name);
+    fileCount++;
+  }
+  return { files: fileCount, chat: chatCount };
+}
+
+/* Parse a ZIP archive (store + deflate) → [{name, method, blob}] */
+export async function readZip(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const td = new TextDecoder();
+
+  // find End of Central Directory
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 66000); i--) {
+    if (buf[i] === 0x50 && buf[i + 1] === 0x4b && buf[i + 2] === 0x05 && buf[i + 3] === 0x06) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('Not a valid ZIP file');
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const count = dv.getUint16(eocd + 10, true);
+  let off = dv.getUint32(eocd + 16, true);
+
+  const entries = [];
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    const method = dv.getUint16(off + 10, true);
+    const csize = dv.getUint32(off + 20, true);
+    const nameLen = dv.getUint16(off + 28, true);
+    const extraLen = dv.getUint16(off + 30, true);
+    const commentLen = dv.getUint16(off + 32, true);
+    const localOff = dv.getUint32(off + 42, true);
+    const name = td.decode(buf.subarray(off + 46, off + 46 + nameLen));
+
+    // local header
+    const lNameLen = dv.getUint16(localOff + 26, true);
+    const lExtraLen = dv.getUint16(localOff + 28, true);
+    const dataStart = localOff + 30 + lNameLen + lExtraLen;
+    const data = buf.subarray(dataStart, dataStart + csize);
+
+    let blob;
+    if (method === 0) blob = new Blob([data]);
+    else if (method === 8) {
+      if (typeof DecompressionStream === 'undefined') throw new Error('This browser cannot decompress ZIP entries');
+      const stream = new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+      blob = await new Response(stream).blob();
+    } else throw new Error('Unsupported compression method ' + method);
+
+    entries.push({ name, method, blob });
+    off += 46 + nameLen + extraLen + commentLen;
+  }
+  return entries;
+}
+
 /* Export only files (used by Files tab) */
 export async function exportAllFiles() {
-  const files = await allFiles();
-  if (!files.length) { toast('No files to export yet.', 'warn'); return; }
+  const all = await allFiles();
+  const files = all.filter((f) => !f.vault);
+  const vaultCount = all.length - files.length;
+  if (!files.length) {
+    toast(vaultCount ? 'Only vault files found — restore them first to export.' : 'No files to export yet.', 'warn');
+    return;
+  }
   const entries = [];
   const used = new Set();
   for (const f of files) {
@@ -158,5 +240,5 @@ export async function exportAllFiles() {
     entries.push({ name, data: await u8(f.blob) });
   }
   download(makeZip(entries), 'ayomide-files.zip');
-  toast(`Exported ${files.length} file(s)`, 'ok');
+  toast(`Exported ${files.length} file(s)${vaultCount ? ` (${vaultCount} vault file(s) skipped)` : ''}`, 'ok', 4500);
 }

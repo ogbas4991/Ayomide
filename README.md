@@ -1,6 +1,6 @@
 # Ayomide Studio 🎨🎬
 
-A **Progressive Web App (PWA)** that works entirely in your browser — even offline.
+A **Progressive Web App (PWA)** that works entirely in your browser — even offline — with optional self-hosted cloud sync.
 
 **Live site:** https://ogbas4991.github.io/Ayomide/
 
@@ -8,38 +8,38 @@ A **Progressive Web App (PWA)** that works entirely in your browser — even off
 
 | Feature | What it does |
 |---|---|
-| 💬 **Chat** | Built-in assistant that runs locally (offline). Attach images, ask how to use the app. Optionally connect any OpenAI-compatible API (OpenAI, Groq, OpenRouter, Ollama…) in Settings for real AI replies. |
-| 📁 **Files** | Upload anything via drag & drop or picker. Preview images/video/audio/text, rename, download, delete. Everything stays on your device (IndexedDB). |
-| 🎨 **Editor** | Rotate, flip, crop (drag a box), resize, and apply filters (brightness, contrast, saturation, hue, blur, grayscale, sepia) with one-tap presets. Undo/redo. Export as PNG/JPEG/WebP — save to Files or download. |
-| 🎬 **Image → Video** | Turn one or more images into a real video file with Ken-Burns motion (zoom in/out, pan), fade transitions, custom duration, resolution (720p/1080p/square/vertical Reels), fps and background colour. |
-| 📦 **Export** | Download any single file, or export everything (files + chat history) as a ZIP. Zero-dependency ZIP writer built in. |
-| 📲 **Installable PWA** | Install to your home screen, launches standalone, fully offline via a service worker. |
+| 💬 **Chat** | Built-in offline assistant, 🎙 voice input, 🔊 spoken replies, multiple threads, image attachments. Optional OpenAI-compatible provider with **streaming** replies and **vision** (the AI sees your images). Chat commands *do things*: “compress all images to 100kb”, “watermark all images with © Ayomide”. |
+| 📁 **Files** | Folders, tags, gallery view + lightbox, duplicate finder, bulk select, previews, encrypted Vault (AES-256), ZIP import/export. |
+| 🎨 **Editor** | Auto-enhance, rotate/flip, crop presets, resize, filters, undo/redo, draw & annotate (brush/arrows/text/emoji/pixelate), watermark, **background removal & chroma key**. |
+| 🎬 **Image → Video** | Ken Burns motion, fades, **music** + **voiceover recording**, animated text titles, all resolutions incl. Reels. |
+| 🧰 **Tools** | **AI image generator** (free, no key), **GIF maker** (images or video), **collage maker**, **batch tools** (convert/resize/compress/watermark), **images → PDF**, **EXIF viewer & stripper** (remove GPS), **QR studio** (styled codes + scanning), **video trimmer + speed**, **OCR**, **insights dashboard**. |
+| ☁️ **Cloud sync** | Self-hosted sync server with **end-to-end encryption** option — the server only ever stores ciphertext. |
+| 📲 **PWA** | Installable, offline, share-sheet target, file handling, app shortcuts, ⌘/Ctrl+K command palette, themes (dark/light/auto + accent colours), **English / Yorùbá / Pidgin** UI. |
 
 ## Tech
 
-- No build step, no frameworks, no external dependencies — plain HTML/CSS/ES modules.
-- **Storage:** IndexedDB (files, chat, settings) — nothing ever leaves the device.
-- **Image → Video:** `<canvas>` animation captured with `MediaRecorder` (records MP4 where supported, otherwise WebM).
-- **PWA:** web app manifest + service worker (pre-cached app shell, stale-while-revalidate).
+- No frontend build step, no frameworks, no dependencies — plain HTML/CSS/ES modules.
+- Custom from-scratch engines (all validated against standard decoders): **QR generator** (ISO 18004 — verified with zxing-cpp), **GIF encoder** (median-cut + LZW — verified with Pillow), **PDF writer** (verified with pypdf), **EXIF parser**, **ZIP reader/writer**.
+- **Storage:** IndexedDB — device-only unless you enable sync.
+- **Video:** canvas + MediaRecorder, audio mixed live via WebAudio.
+- **Vault/E2EE:** WebCrypto (PBKDF2 150k + AES-256-GCM).
+- **PWA:** manifest (share target, file handlers, shortcuts) + service worker v3.
 
 ## Run locally
 
-Any static server works:
-
 ```bash
-python3 -m http.server 8080
-# open http://localhost:8080
+node server/index.js   # site + sync server → http://localhost:3000
 ```
 
-## Deploy
+## Cloud sync server
 
-Live at: **https://ogbas4991.github.io/Ayomide/**
+`server/index.js` — **zero-dependency Node** (scrypt auth, HMAC tokens, 500MB/user quota) that also serves the PWA.
 
-GitHub Pages serves this repo's `main` branch — every push to `main` redeploys automatically.
+**Deploy free (Render):** push the repo → <https://render.com/deploy> with your repo URL (uses `render.yaml`).
+> Render free = ephemeral disk (resets on redeploy). For persistent data use Railway/Fly.io with a volume or a paid Render disk. Env: `PORT`, `DATA_DIR`.
 
-**First-time setup (repo admin, ~30 seconds):**
-1. Open **Settings → Pages** in the repo
-2. Source: **Deploy from a branch**
-3. Branch: **`main`** / `(root)` → **Save**
+**Use:** Settings → Cloud sync → server URL + email + password → *Create account* → *Sync now*. Tick **End-to-end encryption** and set a passphrase for zero-knowledge sync.
 
-The site also runs anywhere static files run (Netlify, Vercel, Cloudflare, any web server) — no build step required.
+## Deploy the PWA
+
+GitHub Pages serves `main` — every push redeploys. First-time: Settings → Pages → Deploy from a branch → `main` / `(root)` → Save.

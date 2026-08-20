@@ -1,7 +1,7 @@
-/* Ayomide Studio — image → video (canvas + MediaRecorder, Ken Burns motion & fades) */
-import { $, $$, uid, toast, download, loadImage, fmtBytes } from './utils.js';
+/* Ayomide Studio — image → video: motion, fades, music, titles (canvas + MediaRecorder + WebAudio) */
+import { $, uid, toast, download, loadImage, fmtBytes, emit } from './utils.js';
 import { addFile, getFile } from './db.js';
-import { pickImages, refresh as refreshFiles } from './files.js';
+import { pickImages, pickAudio, refresh as refreshFiles } from './files.js';
 
 const EFFECTS = {
   'none': 'No motion',
@@ -11,8 +11,9 @@ const EFFECTS = {
   'pan-right': 'Pan right'
 };
 
-let clips = [];       // {id, name, blob, img, dur, effect}
-let lastResult = null; // {blob, ext, info}
+let clips = [];         // {id, name, blob, img, dur, effect, title:{text,pos,color,size,anim}|null}
+let audioTrack = null;  // {name, blob, volume}
+let lastResult = null;
 let rendering = false;
 
 const canvas = () => $('#video-canvas');
@@ -26,6 +27,21 @@ export async function init() {
     await addBlobs([...e.target.files]);
     e.target.value = '';
   });
+
+  // music
+  $('#vid-audio-pick').addEventListener('click', async () => {
+    const rec = await pickAudio();
+    if (rec) setAudio(rec.blob, rec.name);
+  });
+  $('#vid-audio-upload').addEventListener('click', () => $('#vid-audio-input').click());
+  $('#vid-audio-input').addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    e.target.value = '';
+    if (f) setAudio(f, f.name);
+  });
+  $('#vid-audio-vol').addEventListener('input', (e) => { if (audioTrack) audioTrack.volume = parseFloat(e.target.value); });
+  $('#vid-audio-remove').addEventListener('click', () => { audioTrack = null; $('#vid-audio-row').hidden = true; });
+  $('#vid-voiceover').addEventListener('click', voiceover);
 
   $('#vid-res').addEventListener('change', previewFirstFrame);
   $('#vid-bg').addEventListener('input', previewFirstFrame);
@@ -45,6 +61,39 @@ export async function init() {
   });
 
   syncUI();
+}
+
+function setAudio(blob, name, loop = true) {
+  audioTrack = { name, blob, volume: parseFloat($('#vid-audio-vol').value) || 0.8, loop };
+  $('#vid-audio-name').textContent = (loop ? '🎵 ' : '🎙 ') + name;
+  $('#vid-audio-row').hidden = false;
+  toast(loop ? 'Music added — it will be mixed into the video 🎵' : 'Voiceover ready — it plays once during the video 🎙', 'ok');
+}
+
+let voRec = null, voChunks = [], voStream = null;
+async function voiceover() {
+  const btn = $('#vid-voiceover');
+  if (voRec && voRec.state === 'recording') { voRec.stop(); return; }
+  try {
+    voStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    toast('Microphone access denied.', 'error');
+    return;
+  }
+  voChunks = [];
+  voRec = new MediaRecorder(voStream);
+  voRec.ondataavailable = (e) => { if (e.data.size) voChunks.push(e.data); };
+  voRec.onstop = () => {
+    const blob = new Blob(voChunks, { type: voRec.mimeType || 'audio/webm' });
+    voStream.getTracks().forEach((t) => t.stop());
+    btn.textContent = '🎙 Voiceover';
+    btn.classList.remove('recording');
+    setAudio(blob, 'voiceover-' + Date.now().toString(36) + '.webm', false);
+  };
+  voRec.start();
+  btn.textContent = '⏺ Stop recording';
+  btn.classList.add('recording');
+  toast('Recording your voice… tap stop when done 🎙', 'info', 5000);
 }
 
 async function pick() {
@@ -71,7 +120,8 @@ async function addBlob(blob, name) {
     clips.push({
       id: uid(), name: name || 'image', blob, img,
       dur: clips.length ? 4 : 5,
-      effect: 'zoom-in'
+      effect: 'zoom-in',
+      title: null
     });
     syncUI();
     previewFirstFrame();
@@ -97,8 +147,10 @@ function syncUI() {
   clips.forEach((c, i) => {
     const li = document.createElement('li');
     li.className = 'clip-item';
+    li.style.flexWrap = 'wrap';
     const opts = Object.entries(EFFECTS).map(([k, v]) =>
       `<option value="${k}" ${c.effect === k ? 'selected' : ''}>${v}</option>`).join('');
+    const t = c.title || {};
     li.innerHTML = `
       <img src="${c.img.src}" alt="">
       <div class="clip-info">
@@ -111,7 +163,25 @@ function syncUI() {
       <div class="clip-btns">
         <button data-up title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button>
         <button data-down title="Move down" ${i === clips.length - 1 ? 'disabled' : ''}>▼</button>
+        <button data-title title="Add a text title">🅣</button>
         <button data-del title="Remove">✕</button>
+      </div>
+      <div class="title-editor" data-title-editor hidden>
+        <input type="text" data-title-text placeholder="Title text (e.g. Lagos Nights ✨)" value="${t.text || ''}">
+        <div class="row">
+          <select data-title-pos>
+            <option value="top" ${t.pos === 'top' ? 'selected' : ''}>Top</option>
+            <option value="center" ${t.pos === 'center' ? 'selected' : ''}>Center</option>
+            <option value="bottom" ${!t.pos || t.pos === 'bottom' ? 'selected' : ''}>Bottom</option>
+          </select>
+          <select data-title-anim>
+            <option value="fade" ${!t.anim || t.anim === 'fade' ? 'selected' : ''}>Fade in</option>
+            <option value="slide-up" ${t.anim === 'slide-up' ? 'selected' : ''}>Slide up</option>
+            <option value="none" ${t.anim === 'none' ? 'selected' : ''}>Static</option>
+          </select>
+          <input type="color" data-title-color value="${t.color || '#ffffff'}" title="Colour">
+          <label class="inline">Size <input type="range" min="24" max="120" value="${t.size || 52}" data-title-size></label>
+        </div>
       </div>`;
     li.querySelector('[data-effect]').addEventListener('change', (e) => { c.effect = e.target.value; previewFirstFrame(); });
     li.querySelector('[data-dur]').addEventListener('change', (e) => {
@@ -121,13 +191,26 @@ function syncUI() {
     li.querySelector('[data-up]').addEventListener('click', () => { if (i > 0) { [clips[i - 1], clips[i]] = [clips[i], clips[i - 1]]; syncUI(); previewFirstFrame(); } });
     li.querySelector('[data-down]').addEventListener('click', () => { if (i < clips.length - 1) { [clips[i + 1], clips[i]] = [clips[i], clips[i + 1]]; syncUI(); previewFirstFrame(); } });
     li.querySelector('[data-del]').addEventListener('click', () => { clips.splice(i, 1); syncUI(); previewFirstFrame(); });
+
+    const tBtn = li.querySelector('[data-title]');
+    const tEd = li.querySelector('[data-title-editor]');
+    tBtn.addEventListener('click', () => {
+      if (!c.title) c.title = { text: '', pos: 'bottom', color: '#ffffff', size: 52, anim: 'fade' };
+      tEd.hidden = !tEd.hidden;
+    });
+    tEd.querySelector('[data-title-text]').addEventListener('input', (e) => { c.title.text = e.target.value; previewFirstFrame(); });
+    tEd.querySelector('[data-title-pos]').addEventListener('change', (e) => { c.title.pos = e.target.value; previewFirstFrame(); });
+    tEd.querySelector('[data-title-anim]').addEventListener('change', (e) => { c.title.anim = e.target.value; previewFirstFrame(); });
+    tEd.querySelector('[data-title-color]').addEventListener('input', (e) => { c.title.color = e.target.value; previewFirstFrame(); });
+    tEd.querySelector('[data-title-size]').addEventListener('input', (e) => { c.title.size = +e.target.value; previewFirstFrame(); });
+
     list.appendChild(li);
   });
 
   const total = clips.reduce((n, c) => n + c.dur, 0);
   $('#btn-render').disabled = !clips.length || rendering;
   $('#btn-render').textContent = clips.length
-    ? `🎬 Render video (${total.toFixed(1)}s)`
+    ? `🎬 Render video (${total.toFixed(1)}s${audioTrack ? ' + 🎵' : ''})`
     : '🎬 Render video';
 }
 
@@ -142,6 +225,9 @@ function previewFirstFrame() {
   const c = canvas();
   c.width = W; c.height = H;
   drawFrame(0, W, H);
+  // show first-clip title in preview
+  const ctx = c.getContext('2d');
+  drawTitle(ctx, clips[0], W, H, clips[0].dur / 2, 1);
 }
 
 /* ---------- drawing ---------- */
@@ -160,6 +246,34 @@ function drawClipFrame(ctx, clip, W, H, p) {
   const overX = Math.max(0, (dw - W) / 2);
   const overY = Math.max(0, (dh - H) / 2);
   ctx.drawImage(img, (W - dw) / 2 + ox * overX, (H - dh) / 2 + oy * overY, dw, dh);
+}
+
+function drawTitle(ctx, clip, W, H, local, baseAlpha) {
+  const t = clip.title;
+  if (!t || !t.text) return;
+  const fs = Math.round((t.size || 52) * H / 1080);
+  ctx.save();
+  ctx.font = `700 ${fs}px -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.textAlign = 'center';
+  const pad = H * 0.08;
+  const pos = t.pos || 'bottom';
+  let y = pos === 'top' ? pad : pos === 'center' ? H / 2 : H - pad;
+  ctx.textBaseline = pos === 'top' ? 'top' : pos === 'center' ? 'middle' : 'alphabetic';
+  let alpha = baseAlpha, dy = 0;
+  const anim = t.anim || 'fade';
+  if (anim !== 'none') {
+    const inR = Math.min(1, local / 0.6);
+    const outR = Math.min(1, Math.max(0, (clip.dur - local)) / 0.6);
+    const ramp = Math.max(0, Math.min(inR, outR));
+    alpha *= ramp;
+    if (anim === 'slide-up') dy = (1 - ramp) * fs * 0.8;
+  }
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.shadowColor = 'rgba(0,0,0,.6)';
+  ctx.shadowBlur = fs * 0.3;
+  ctx.fillStyle = t.color || '#ffffff';
+  ctx.fillText(t.text, W / 2, y + dy);
+  ctx.restore();
 }
 
 function drawFrame(t, W, H) {
@@ -188,11 +302,17 @@ function drawFrame(t, W, H) {
   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
   drawClipFrame(ctx, c, W, H, c.dur ? local / c.dur : 0);
   ctx.globalAlpha = 1;
+  drawTitle(ctx, c, W, H, local, alpha);
 }
 
 /* ---------- recorder ---------- */
-function pickMime() {
-  const cands = [
+function pickMime(hasAudio) {
+  const cands = hasAudio ? [
+    ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'mp4'],
+    ['video/webm;codecs=vp9,opus', 'webm'],
+    ['video/webm;codecs=vp8,opus', 'webm'],
+    ['video/webm', 'webm']
+  ] : [
     ['video/mp4;codecs=avc1.42E01E', 'mp4'],
     ['video/mp4', 'mp4'],
     ['video/webm;codecs=vp9', 'webm'],
@@ -209,7 +329,8 @@ function pickMime() {
 export async function startRender() {
   if (rendering) return;
   if (!clips.length) { toast('Add at least one image first 🖼️', 'warn'); return; }
-  const pick = pickMime();
+  const hasAudio = !!audioTrack;
+  const pick = pickMime(hasAudio);
   if (!pick) { toast('This browser cannot record video (MediaRecorder unsupported).', 'error'); return; }
 
   rendering = true;
@@ -226,13 +347,40 @@ export async function startRender() {
   c.width = W; c.height = H;
   drawFrame(0, W, H);
 
-  const stream = c.captureStream(fps);
+  const videoStream = c.captureStream(fps);
+  let stream = videoStream;
+
+  // audio setup
+  let audioCtx = null, audioSrc = null;
+  if (hasAudio) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AC();
+      const buf = await audioCtx.decodeAudioData(await audioTrack.blob.arrayBuffer());
+      const dest = audioCtx.createMediaStreamDestination();
+      audioSrc = audioCtx.createBufferSource();
+      audioSrc.buffer = buf;
+      audioSrc.loop = audioTrack.loop !== false;
+      const gain = audioCtx.createGain();
+      gain.gain.value = audioTrack.volume;
+      audioSrc.connect(gain).connect(dest);
+      audioSrc.start();
+      stream = new MediaStream([...videoStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    } catch (err) {
+      toast('Could not decode the audio — rendering without music.', 'warn');
+      stream = videoStream;
+      hasAudioFailedStop(audioCtx, audioSrc);
+      audioCtx = null; audioSrc = null;
+    }
+  }
+
   let rec;
   try {
-    rec = new MediaRecorder(stream, { mimeType: pick.mime, videoBitsPerSecond: 8_000_000 });
+    rec = new MediaRecorder(stream, { mimeType: pick.mime, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 160_000 });
   } catch (err) {
     toast('Could not start the recorder: ' + err.message, 'error');
     rendering = false;
+    cleanupAudio();
     syncUI();
     return;
   }
@@ -260,6 +408,7 @@ export async function startRender() {
   rec.stop();
   await stopped;
   stream.getTracks().forEach((t) => t.stop());
+  cleanupAudio();
 
   $('#video-progress').style.width = '100%';
   $('#video-progress-wrap').hidden = true;
@@ -275,15 +424,25 @@ export async function startRender() {
 
   lastResult = {
     blob, ext: pick.ext,
-    info: `${W}×${H} · ${fps}fps · ${total.toFixed(1)}s · ${fmtBytes(blob.size)} · .${pick.ext}`
+    info: `${W}×${H} · ${fps}fps · ${total.toFixed(1)}s${hasAudio ? ' · 🎵' : ''} · ${fmtBytes(blob.size)} · .${pick.ext}`
   };
   $('#video-player').src = URL.createObjectURL(blob);
   $('#video-stage').hidden = true;
   $('#video-result').hidden = false;
-  $('#vid-info').textContent = lastResult.info + ' — saved nowhere yet. Save to Files or download to keep it!';
+  $('#vid-info').textContent = lastResult.info + ' — save it or download to keep it!';
   toast('Video ready! 🎬', 'ok', 5000);
   rendering = false;
   syncUI();
+
+  function cleanupAudio() {
+    try { audioSrc?.stop(); } catch { }
+    try { audioCtx?.close(); } catch { }
+  }
+}
+
+function hasAudioFailedStop(ctx, src) {
+  try { src?.stop(); } catch { }
+  try { ctx?.close(); } catch { }
 }
 
 async function saveResult() {
